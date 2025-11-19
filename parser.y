@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unordered_map>
 
 /* Prototipos */
 int yylex(void);
@@ -12,6 +13,30 @@ FILE *tokenFile;
 
 int lineNumber, columnNumber;
 char type[50], lexeme[100];
+
+unordered_map<string, string> mapClassStereotype = {{"relator", "ClassStereotype"}, {"event", "ClassStereotype"}, {"situation", "ClassStereotype"}, {"process", "ClassStereotype"},
+{"category", "ClassStereotype"}, {"mixin", "ClassStereotype"}, {"phaseMixin", "ClassStereotype"}, {"roleMixin", "ClassStereotype"}, {"historialRoleMixin", "ClassStereotype"},
+{"kind", "ClassStereotype"}, {"collective", "ClassStereotype"}, {"quantity", "ClassStereotype"}, {"quality", "ClassStereotype"}, {"mode", "ClassStereotype"}, {"intrisicMode", "ClassStereotype"},
+{"extrinsicMode", "ClassStereotype"}, {"subkind", "ClassStereotype"}, {"phase", "ClassStereotype"}, {"role", "ClassStereotype"}, {"historicalRole", "ClassStereotype"},
+{"material", "ClassStereotype"}, {"intrinsic-modes", "ClassStereotype"}};
+
+unordered_map<string, string> mapRelationStereotype = {{"material", "RelationStereotype"}, {"derivation", "RelationStereotype"}, {"comparative", "RelationStereotype"}, 
+{"mediation", "RelationStereotype"}, {"characterization", "RelationStereotype"},
+{"externalDependence", "RelationStereotype"}, {"componentOf", "RelationStereotype"}, {"memberOf", "RelationStereotype"}, {"subCollectionOf", "RelationStereotype"},
+{"subQualityOf", "RelationStereotype"}, {"instantiation", "RelationStereotype"}, {"termination", "RelationStereotype"}, {"participational", "RelationStereotype"},
+{"participation", "RelationStereotype"}, {"historicalDependence", "RelationStereotype"}, {"creation", "RelationStereotype"}, {"manifestation", "RelationStereotype"},
+{"bringsAbout", "RelationStereotype"}, {"triggers", "RelationStereotype"}, {"composition", "RelationStereotype"}, {"aggregation", "RelationStereotype"},
+{"inherence", "RelationStereotype"}, {"value", "RelationStereotype"}, {"formal", "RelationStereotype"}, {"constitution", "RelationStereotype"}}
+
+unordered_map<string, string> mapReservedWords = {{"import", "ReservedWords"} ,{"genset", "ReservedWords"},{"functional-complexes", "ReservedWords"},
+{"disjoint", "ReservedWords"}, {"complete", "ReservedWords"}, {"general", "ReservedWords"}, {"specifics", "ReservedWords"}, {"where", "ReservedWords"},
+{"package", "ReservedWords"}};
+
+unordered_map<string, string> mapDatatypes = {{"number", "Datatypes"}, {"string", "Datatypes"}, {"boolean", "Datatypes"}, {"date", "Datatypes"}, 
+{"time", "Datatypes"}, {"datetime", "Datatypes"}};
+
+unordered_map<string, string> mapMetaAtributes = {{"ordered", "MetaAtributes"}, {"const", "MetaAtributes"}, {"derived", "MetaAtributes"}, 
+{"subsets", "MetaAtributes"}, {"redefines", "MetaAtributes"}};
 %}
 
 /* Declaração de tokens (iguais aos tipos do seu arquivo de tokens) */
@@ -58,7 +83,11 @@ int yylex(void) {
             lineNumber, columnNumber, type, lexeme);
     
 
-    if (strcmp(type, "keyword") == 0) return ID;
+    if (mapClassStereotype.find(lexeme) != mapClassStereotype.end()) {
+        return ID;
+    }
+
+    
     if (strcmp(type, "NUM") == 0) return NUM;
     if (strcmp(type, "ATRIB") == 0) return ATRIB;
     if (strcmp(type, "PLUS") == 0) return PLUS;
