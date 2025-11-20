@@ -1,18 +1,24 @@
-    #include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 int yyparse(void);
 extern FILE *tokenFile;
+extern void init_maps();
 
-int main(void) {
-    tokenFile = fopen("tokens.txt", "r");
-    if (!tokenFile) {
-        perror("Erro ao abrir tokens.txt");
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        fprintf(stderr, "Uso: %s <arquivo_tokens>\n", argv[0]);
         return 1;
     }
 
-    if (yyparse() == 0)
-        printf("Análise concluída sem erros!\n");
+    tokenFile = fopen(argv[1], "r");
+    if (!tokenFile) {
+        perror("Erro ao abrir arquivo");
+        return 1;
+    }
+
+    init_maps(); // Carrega os mapas
+    yyparse();   // Inicia a análise
 
     fclose(tokenFile);
     return 0;
