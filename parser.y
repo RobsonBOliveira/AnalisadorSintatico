@@ -81,6 +81,7 @@ lista_pacotes:
 /* 1. Declaração de Pacotes */
 pacote:
       PACKAGE ID LBRACE conteudo_pacote RBRACE
+    | PACKAGE ID conteudo_pacote 
     ;
 
 conteudo_pacote:
@@ -98,7 +99,18 @@ elemento:
 
 /* 2. Declaração de Classes */
 declaracao_classe:
-      CLASS_STEREO ID LBRACE corpo_classe RBRACE
+      CLASS_STEREO ID opt_relation LBRACE corpo_classe RBRACE
+    | CLASS_STEREO ID opt_relation
+    ;
+
+opt_relation:
+      /* vazio */
+    | relation_list
+    ;
+
+relation_list:
+      REL_STEREO ID
+    | relation_list COMMA ID
     ;
 
 corpo_classe:
@@ -145,6 +157,7 @@ lista_enum:
 /* Cobre os dois casos: 'genset Name where...' e 'general Name { ... }' */
 declaracao_genset:
       meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
+    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
     | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
     ;
 
@@ -280,7 +293,7 @@ void init_maps() {
         {"bringsAbout", REL_STEREO}, {"triggers", REL_STEREO},
         {"composition", REL_STEREO}, {"aggregation", REL_STEREO},
         {"inherence", REL_STEREO}, {"value", REL_STEREO}, {"formal", REL_STEREO},
-        {"constitution", REL_STEREO}
+        {"constitution", REL_STEREO}, {"specializes", REL_STEREO}
     };
 
     mapDatatypes = {
