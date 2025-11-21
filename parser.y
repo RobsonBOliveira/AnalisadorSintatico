@@ -40,6 +40,7 @@ void init_maps();
 %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL-COMPLEXES
 %token ENUM DATATYPE RELATION
 
+
 /* Meta Atributos */
 %token ORDERED CONST DERIVED SUBSETS REDEFINES
 
@@ -60,8 +61,11 @@ void init_maps();
 %token ARROW_ASSOC         /* -- */
 %token ARROW_AGG           /* <>-- */
 %token ARROW_COMP          /* <*>-- (exemplo hipotético para composição) */
+%token CARDINALITY         /* [1..*] */
 %token EOF_TOKEN
 
+
+%left ARROW_ASSOC ARROW_AGG ARROW_COMP
 %%
 
 /* ========================================================================== */
@@ -70,9 +74,9 @@ void init_maps();
 
 /* 1. O Programa é um conjunto de pacotes */
 programa:
-      lista_pacotes EOF_TOKEN { printf("Sucesso: Especificação TONTO sintaticamente correta.\n"); }
+      lista_pacotes { printf("Sucesso: Especificação TONTO sintaticamente correta.\n"); }
     ;
-
+    
 lista_pacotes:
       pacote
     | lista_pacotes pacote
@@ -113,11 +117,18 @@ relation_list:
     | relation_list COMMA ID
     ;
 
+/* corpo da classe: lista explícita de membros */
 corpo_classe:
       /* vazio */
-    | corpo_classe membro_classe
+    | lista_membros
     ;
 
+lista_membros:
+      membro_classe
+    | lista_membros membro_classe
+    ;
+
+/* membro pode ser atributo OU uma relação (relacao_interna) */
 membro_classe:
       atributo
     | relacao_interna
@@ -175,9 +186,12 @@ lista_ids:
 /* 6. Declaração de Relações */
 
 /* Caso Interno: dentro de uma classe (Ex: componentOf <>-- Department) */
+
 relacao_interna:
-      REL_STEREO operador_relacao ID cardinalidade_opt
-      { printf("  -> Relação interna reconhecida.\n"); }
+      opt_rel_stereo operador_relacao ID operador_relacao cardinalidade_opt ID
+    {
+        printf("  -> Relação interna reconhecida (com/sem estereótipo).\n");
+    }
     ;
 
 /* Caso Externo: fora de classes (Ex: relation @mediation ... ) */
@@ -198,10 +212,16 @@ operador_relacao:
     | ARROW_COMP
     ;
 
+opt_rel_stereo:
+      /* vazio */
+    | REL_STEREO
+    ;
+
 cardinalidade_opt:
       /* vazio */
     | LBRACKET NUM RBRACKET
     | LBRACKET NUM ARROW_ASSOC NUM RBRACKET /* Ex: [1..*] simplificado */
+    | CARDINALITY
     ;
 
 %%
@@ -239,7 +259,8 @@ int yylex(void) {
     
     /* 3. Verifica Estereótipos de Relação (com ou sem @) */
     string cleanLex = lex;
-    if (lex[0] == '@') cleanLex = lex.substr(1); // Remove @ se existir
+    if (lex == "@") return yylex(); // simplesmente ignore o token '@'
+    if (lex[0] == '@') cleanLex = lex.substr(1); // ex: @mediation vira mediation
     if (mapRelationStereotypes.find(cleanLex) != mapRelationStereotypes.end()) {
         return REL_STEREO;
     }
@@ -256,6 +277,7 @@ int yylex(void) {
 
     /* 6. Verifica Tokens Genéricos baseados no TIPO vindo do arquivo */
     if (strcmp(typeStr, "NUM") == 0) return NUM;
+    if (strcmp(typeStr, "Cardinality") == 0) return CARDINALITY;
     if (strcmp(typeStr, "EOF") == 0) return EOF_TOKEN;
     
     /* Se não for nenhum dos acima e for um identificador */
