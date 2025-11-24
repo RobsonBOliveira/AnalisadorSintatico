@@ -347,19 +347,37 @@ lista_ids:
 /* ========================================================================== */
 
 relacao_interna:
-    opt_rel_stereo operador_relacao ID operador_relacao cardinalidade_opt ID
+    opt_rel_stereo simple_relation
+  | opt_rel_stereo cardinal_relation
+  ;
+  simple_relation:
+      operador_relacao ID operador_relacao cardinalidade_opt ID
     {
         if (currentClass != nullptr) {
             InternalRelationInfo rel;
-            rel.stereotype = ($1) ? string($1) : "";
-            rel.name = string($3);
-            rel.cardinality = ($5) ? string($5) : "";
-            rel.targetClass = string($6);
+            rel.stereotype = ($<sval>1) ? string($1) : "";
+            rel.name = string($2);
+            rel.cardinality = ($4) ? string($4) : "";
+            rel.targetClass = string($5);
+
+            currentClass->internalRelations.push_back(rel);
+        }
+    }
+    ;
+
+cardinal_relation:
+      CARDINALITY operador_relacao opt_has CARDINALITY ID
+    {
+        if(currentClass != nullptr) {
+            InternalRelationInfo rel;
+            rel.stereotype = "";
+            rel.name = "";
+            rel.cardinality = ($1) ? string($1) : "";
+            rel.targetClass = string($5);
             
             currentClass->internalRelations.push_back(rel);
         }
     }
-    | CARDINALITY operador_relacao opt_has CARDINALITY ID
     ;
 
 opt_has:
@@ -368,22 +386,14 @@ opt_has:
     ;
     
 declaracao_relacao_externa:
-    REL_STEREO opt_rel_stereo corpo_relacao_externa
+    RELATION opt_rel_stereo corpo_relacao_externa
     {
         RelationInfo ri;
-        ri.stereotype = string($2);
-        ri.type = "Externa";
-        externalRelations.push_back(ri);
-    }
-    | REL_STEREO corpo_relacao_externa
-    {
-        RelationInfo ri;
-        ri.stereotype = "N/A";
+        ri.stereotype = $2 ? string($2) : "N/A";
         ri.type = "Externa";
         externalRelations.push_back(ri);
     }
     ;
-
 corpo_relacao_externa:
     ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
     | ID cardinalidade_opt operador_relacao CARDINALITY ID
