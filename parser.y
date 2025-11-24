@@ -37,192 +37,218 @@ void init_maps();
 /* ========================================================================== */
 
 /* Palavras reservadas estruturais */
-%token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL-COMPLEXES
-%token ENUM DATATYPE RELATION
+    %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
+    %token ENUM DATATYPE RELATION
 
 
-/* Meta Atributos */
-%token ORDERED CONST DERIVED SUBSETS REDEFINES
+    /* Meta Atributos */
+    %token ORDERED CONST DERIVED SUBSETS REDEFINES
 
-/* Estereótipos (Identificados pelos mapas) */
-%token CLASS_STEREO        /* ex: kind, role, phase */
-%token REL_STEREO          /* ex: material, componentOf */
+    /* Estereótipos (Identificados pelos mapas) */
+    %token CLASS_STEREO        /* ex: kind, role, phase */
+    %token REL_STEREO          /* ex: material, componentOf */
 
-/* Tipos primitivos */
-%token NATIVE_TYPE         /* ex: string, int, boolean */
+    /* Tipos primitivos */
+    %token NATIVE_TYPE         /* ex: string, int, boolean */
 
-/* Símbolos e Literais */
-%token ID
-%token NUM STRING_LIT
-%token LBRACE RBRACE       /* { } */
-%token LBRACKET RBRACKET   /* [ ] */
-%token COLON               /* : */
-%token COMMA               /* , */
-%token ARROW_ASSOC         /* -- */
-%token ARROW_AGG           /* <>-- */
-%token ARROW_COMP          /* <*>-- (exemplo hipotético para composição) */
-%token CARDINALITY         /* [1..*] */
-%token EOF_TOKEN
+    /* Símbolos e Literais */
+    %token ID
+    %token NUM STRING_LIT
+    %token LBRACE RBRACE       /* { } */
+    %token LBRACKET RBRACKET   /* [ ] */
+    %token COLON               /* : */
+    %token DOT               /* . */
+    %token COMMA               /* , */
+    %token ARROW_ASSOC         /* -- */
+    %token ARROW_AGG           /* <>-- */
+    %token ARROW_COMP          /* <*>-- */
+    %token ARROW_AGG_EXISTENTIAL /* <o>-- */
+    %token CARDINALITY         /* [1..*] */
+    %token EOF_TOKEN
 
 
-%left ARROW_ASSOC ARROW_AGG ARROW_COMP
-%%
+    %left ARROW_ASSOC ARROW_AGG ARROW_COMP
+    %%
 
-/* ========================================================================== */
-/* REGRAS DA GRAMÁTICA                             */
-/* ========================================================================== */
+    /* ========================================================================== */
+    /* REGRAS DA GRAMÁTICA                             */
+    /* ========================================================================== */
 
-/* 1. O Programa é um conjunto de pacotes */
-programa:
-      lista_pacotes { printf("Sucesso: Especificação TONTO sintaticamente correta.\n"); }
-    ;
-    
-lista_pacotes:
-      pacote
-    | lista_pacotes pacote
-    ;
+    /* 1. O Programa é um conjunto de pacotes */
+    programa:
+        lista_imports lista_pacotes { printf("Sucesso: Especificação TONTO sintaticamente correta.\n"); }
+        ;
+        
+    lista_pacotes:
+        pacote
+        | lista_pacotes pacote
+        ;
 
-/* 1. Declaração de Pacotes */
-pacote:
-      PACKAGE ID LBRACE conteudo_pacote RBRACE
-    | PACKAGE ID conteudo_pacote 
-    ;
+    /* 1. Declaração de Pacotes */
+    lista_imports:
+        /* vazio */
+        | lista_imports IMPORT ID
+        ;
 
-conteudo_pacote:
-      /* vazio */
-    | conteudo_pacote elemento
-    ;
+    pacote:
+        PACKAGE ID LBRACE conteudo_pacote RBRACE
+        | PACKAGE ID conteudo_pacote 
+        ;
 
-elemento:
-      declaracao_classe
-    | declaracao_datatype
-    | declaracao_enum
-    | declaracao_genset
-    | declaracao_relacao_externa
-    ;
+    conteudo_pacote:
+        /* vazio */
+        | conteudo_pacote elemento
+        ;
 
-/* 2. Declaração de Classes */
-declaracao_classe:
-      CLASS_STEREO ID opt_relation LBRACE corpo_classe RBRACE
-    | CLASS_STEREO ID opt_relation
-    ;
+    elemento:
+        declaracao_classe
+        | declaracao_datatype
+        | declaracao_enum
+        | declaracao_genset
+        | declaracao_relacao_externa
+        | declaracao_classe_subkind
+        ;
 
-opt_relation:
-      /* vazio */
-    | relation_list
-    ;
+    /* 2. Declaração de Classes */
+    declaracao_classe:
+        CLASS_STEREO ID opt_relation LBRACE corpo_classe RBRACE
+        | CLASS_STEREO ID opt_relation
+        ;
 
-relation_list:
-      REL_STEREO ID
-    | relation_list COMMA ID
-    ;
-
-/* corpo da classe: lista explícita de membros */
-corpo_classe:
-      /* vazio */
-    | lista_membros
+    declaracao_classe_subkind:
+        CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES REL_STEREO ID
+        | CLASS_STEREO ID OF CLASS_STEREO REL_STEREO ID
     ;
 
-lista_membros:
-      membro_classe
-    | lista_membros membro_classe
+    opt_relation:
+        /* vazio */
+        | relation_list
+        ;
+
+    relation_list:
+        REL_STEREO ID
+        | relation_list COMMA ID
+        ;
+
+    /* corpo da classe: lista explícita de membros */
+    corpo_classe:
+        /* vazio */
+        | lista_membros
+        ;
+
+    lista_membros:
+        membro_classe
+        | lista_membros membro_classe
+        ;
+
+    /* membro pode ser atributo OU uma relação (relacao_interna) */
+    membro_classe:
+        atributo
+        | relacao_interna
+        ;
+
+    atributo:
+        ID COLON tipo_referencia { printf("  -> Atributo reconhecido.\n"); }
+        ;
+
+    /* Helper para tipos: pode ser nativo ou um ID de classe/tipo criado */
+    tipo_referencia:
+        NATIVE_TYPE
+        | ID
+        ;
+
+    /* 3. Declaração de Tipos de Dados (Datatypes derivados) */
+    declaracao_datatype:
+        DATATYPE ID LBRACE lista_atributos RBRACE
+        | DATATYPE ID
+        | DATATYPE NATIVE_TYPE
+        ;
+
+    lista_atributos:
+        atributo
+        | lista_atributos atributo
+        ;
+
+    /* 4. Declaração de Classes Enumeradas */
+    declaracao_enum:
+        ENUM ID LBRACE lista_enum RBRACE
+        ;
+
+    lista_enum:
+        ID
+        | lista_enum COMMA ID
+        ;
+
+    /* 5. Generalizações (Gensets) */
+    /* Cobre os dois casos: 'genset Name where...' e 'general Name { ... }' */
+    declaracao_genset:
+        meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
+        | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
+        | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
+        ;
+
+    meta_atributos:
+        /* vazio */
+        | meta_atributos DISJOINT
+        | meta_atributos COMPLETE
+        ;
+
+    lista_ids:
+        ID
+        | lista_ids COMMA ID
+        ;
+
+    /* 6. Declaração de Relações */
+
+    /* Caso Interno: dentro de uma classe (Ex: componentOf <>-- Department) */
+
+    relacao_interna:
+      opt_rel_stereo relacao
     ;
 
-/* membro pode ser atributo OU uma relação (relacao_interna) */
-membro_classe:
-      atributo
-    | relacao_interna
+    relacao:
+        operador_relacao ID operador_relacao cardinalidade_opt ID
+        | CARDINALITY operador_relacao opt_has CARDINALITY ID
     ;
 
-atributo:
-      ID COLON tipo_referencia { printf("  -> Atributo reconhecido.\n"); }
+    opt_has:
+        /* vazio */
+        | HAS operador_relacao
     ;
+        
+    /* Caso Externo: fora de classes (Ex: relation @mediation ... ) */
+    declaracao_relacao_externa:
+        RELATION REL_STEREO corpo_relacao_externa
+        | RELATION corpo_relacao_externa
+        ;
 
-/* Helper para tipos: pode ser nativo ou um ID de classe/tipo criado */
-tipo_referencia:
-      NATIVE_TYPE
-    | ID
-    ;
+    /* Define a estrutura solta vista no exemplo 6 */
+    corpo_relacao_externa:
+        /* Pode ser nomeada ou não, o exemplo é flexível, assumindo estrutura básica:
+        Dominio -- Imagem */
+        ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
+        | ID cardinalidade_opt operador_relacao CARDINALITY ID
+        ;
 
-/* 3. Declaração de Tipos de Dados (Datatypes derivados) */
-declaracao_datatype:
-      DATATYPE ID LBRACE lista_atributos RBRACE
-    ;
+    operador_relacao:
+        ARROW_ASSOC
+        | ARROW_AGG
+        | ARROW_COMP
+        | ARROW_AGG_EXISTENTIAL
+        ;
 
-lista_atributos:
-      atributo
-    | lista_atributos atributo
-    ;
+    opt_rel_stereo:
+        /* vazio */
+        | REL_STEREO
+        ;
 
-/* 4. Declaração de Classes Enumeradas */
-declaracao_enum:
-      ENUM ID LBRACE lista_enum RBRACE
-    ;
-
-lista_enum:
-      ID
-    | lista_enum COMMA ID
-    ;
-
-/* 5. Generalizações (Gensets) */
-/* Cobre os dois casos: 'genset Name where...' e 'general Name { ... }' */
-declaracao_genset:
-      meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
-    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
-    | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
-    ;
-
-meta_atributos:
-      /* vazio */
-    | meta_atributos DISJOINT
-    | meta_atributos COMPLETE
-    ;
-
-lista_ids:
-      ID
-    | lista_ids COMMA ID
-    ;
-
-/* 6. Declaração de Relações */
-
-/* Caso Interno: dentro de uma classe (Ex: componentOf <>-- Department) */
-
-relacao_interna:
-      opt_rel_stereo operador_relacao ID operador_relacao cardinalidade_opt ID
-    {
-        printf("  -> Relação interna reconhecida (com/sem estereótipo).\n");
-    }
-    ;
-
-/* Caso Externo: fora de classes (Ex: relation @mediation ... ) */
-declaracao_relacao_externa:
-      RELATION REL_STEREO corpo_relacao_externa
-    ;
-
-/* Define a estrutura solta vista no exemplo 6 */
-corpo_relacao_externa:
-    /* Pode ser nomeada ou não, o exemplo é flexível, assumindo estrutura básica:
-       Dominio -- Imagem */
-    ID cardinalidade_opt operador_relacao ID cardinalidade_opt
-    ;
-
-operador_relacao:
-      ARROW_ASSOC
-    | ARROW_AGG
-    | ARROW_COMP
-    ;
-
-opt_rel_stereo:
-      /* vazio */
-    | REL_STEREO
-    ;
-
-cardinalidade_opt:
-      /* vazio */
-    | LBRACKET NUM RBRACKET
-    | LBRACKET NUM ARROW_ASSOC NUM RBRACKET /* Ex: [1..*] simplificado */
-    | CARDINALITY
-    ;
+    cardinalidade_opt:
+        /* vazio */
+        | LBRACKET NUM RBRACKET
+        | LBRACKET NUM ARROW_ASSOC NUM RBRACKET /* Ex: [1..*] simplificado */
+        | LBRACKET NUM DOT DOT NUM RBRACKET
+        | CARDINALITY
+        ;
 
 %%
 
@@ -251,6 +277,7 @@ int yylex(void) {
     if (lex == ",") return COMMA;
     if (lex == "--") return ARROW_ASSOC;
     if (lex == "<>--") return ARROW_AGG;
+    if (lex == "<o>--") return ARROW_AGG_EXISTENTIAL;
     
     /* 2. Verifica Estereótipos de Classe */
     if (mapClassStereotypes.find(lex) != mapClassStereotypes.end()) {
@@ -300,7 +327,7 @@ void init_maps() {
         {"intrisicMode", CLASS_STEREO}, {"extrinsicMode", CLASS_STEREO},
         {"subkind", CLASS_STEREO}, {"phase", CLASS_STEREO}, {"role", CLASS_STEREO},
         {"historicalRole", CLASS_STEREO}, {"material", CLASS_STEREO},
-        {"intrinsic-modes", CLASS_STEREO}
+        {"intrinsic-modes", CLASS_STEREO}, {"relators", CLASS_STEREO}
     };
 
     mapRelationStereotypes = {
@@ -327,6 +354,8 @@ void init_maps() {
         {"package", PACKAGE}, {"import", IMPORT}, {"genset", GENSET},
         {"disjoint", DISJOINT}, {"complete", COMPLETE}, {"general", GENERAL},
         {"specifics", SPECIFICS}, {"where", WHERE},
-        {"enum", ENUM}, {"datatype", DATATYPE}, {"relation", RELATION}
+        {"enum", ENUM}, {"datatype", DATATYPE}, {"relation", RELATION}, {"of", OF},
+        {"specializes", SPECIALIZES}, {"functional-complexes", FUNCTIONAL_COMPLEXES},
+        {"has", HAS}
     };
 }
