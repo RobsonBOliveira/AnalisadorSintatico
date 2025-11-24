@@ -110,7 +110,7 @@ void printErrorReport();
 /* Símbolos */
 %token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
 %token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
-%token EOF_TOKEN
+/* EOF_TOKEN removido pois usaremos o 0 padrão do Bison */
 
 %left ARROW_ASSOC ARROW_AGG ARROW_COMP
 
@@ -120,10 +120,9 @@ void printErrorReport();
 /* REGRAS DA GRAMÁTICA                                                        */
 /* ========================================================================== */
 
+/* CORREÇÃO AQUI: Removido EOF_TOKEN explícito. O parse termina quando yylex retorna 0. */
 programa:
-    lista_imports lista_pacotes EOF_TOKEN { 
-        // Apenas termina. O main chamará os relatórios.
-    }
+    lista_imports lista_pacotes
     ;
     
 lista_imports:
@@ -142,20 +141,17 @@ lista_pacotes:
 pacote:
     PACKAGE ID 
     {
-        // Inicia novo contexto de pacote
         PackageInfo newPkg;
         newPkg.name = string($2);
         packages.push_back(newPkg);
-        // Aponta currentPackage para o último elemento inserido
         currentPackage = &packages.back();
     }
     LBRACE conteudo_pacote RBRACE
     {
-        currentPackage = nullptr; // Limpa contexto
+        currentPackage = nullptr; 
     }
     | PACKAGE ID conteudo_pacote 
     {
-        // Caso sem chaves (menos comum, mas suportado na gramática original)
         PackageInfo newPkg;
         newPkg.name = string($2);
         packages.push_back(newPkg);
@@ -215,7 +211,7 @@ declaracao_classe_subkind:
          if (currentPackage != nullptr) {
             ClassInfo newClass;
             newClass.name = string($2);
-            newClass.stereotype = string($1); // Provavelmente "subkind"
+            newClass.stereotype = string($1); 
             currentPackage->classes.push_back(newClass);
         }
     }
@@ -287,11 +283,9 @@ lista_atributos:
 declaracao_enum:
     ENUM ID LBRACE lista_enum RBRACE
     {
-        // Contar quantos itens tem na lista_enum é difícil aqui sem uma ação no meio
-        // Simplificação: apenas registrar o enum
         EnumInfo ei;
         ei.name = string($2);
-        ei.literalCount = -1; // Indefinido nesta lógica simples
+        ei.literalCount = -1; 
         enums.push_back(ei);
     }
     ;
@@ -409,7 +403,7 @@ cardinalidade_opt:
 int yylex(void) {
     if (fscanf(tokenFile, "%d %d %s %s", 
                &lineNumber, &columnNumber, typeStr, lexeme) != 4) {
-        return 0; 
+        return 0; /* CORREÇÃO: Fim de arquivo físico retorna 0 */
     }
 
     string lex(lexeme);
@@ -426,9 +420,9 @@ int yylex(void) {
     if (lex == "<>--") return ARROW_AGG;
     if (lex == "<o>--") return ARROW_AGG_EXISTENTIAL;
     
-    /* Estereótipos de Classe (SALVA O NOME) */
+    /* Estereótipos de Classe */
     if (mapClassStereotypes.find(lex) != mapClassStereotypes.end()) {
-        yylval.sval = strdup(lexeme); // IMPORTANTE: Copia string para uso no parser
+        yylval.sval = strdup(lexeme); 
         return CLASS_STEREO;
     }
     
@@ -453,7 +447,7 @@ int yylex(void) {
         return NATIVE_TYPE;
     }
 
-    /* Genéricos */
+    /* Tokens Especiais do Léxico */
     if (strcmp(typeStr, "NUM") == 0) {
         yylval.sval = strdup(lexeme);
         return NUM;
@@ -462,29 +456,29 @@ int yylex(void) {
         yylval.sval = strdup(lexeme);
         return CARDINALITY;
     }
-    if (strcmp(typeStr, "EOF") == 0) return EOF_TOKEN;
     
-    /* Identificadores (SALVA O NOME) */
+    /* CORREÇÃO: Tratar EOF explicitamente como 0 */
+    if (strcmp(typeStr, "EOF") == 0) return 0;
+    
+    /* Identificadores */
     yylval.sval = strdup(lexeme);
     return ID;
 }
 
-/* Tratamento de Erro Melhorado */
 void yyerror(const char *s) {
+    // Ignora erro se for apenas "syntax error" no fim do arquivo e já tivemos sucesso no parse
+    // Mas como o parser para no erro, melhor registrar e filtrar depois.
+    
     ErrorInfo erro;
     erro.line = lineNumber;
     erro.col = columnNumber;
     erro.message = string(s) + " (Token: " + string(lexeme) + ")";
     
-    // Sugestões simples baseadas no último token lido
-    if (string(lexeme) == "}") erro.suggestion = "Verifique se fechou corretamente o bloco anterior ou se falta ponto e vírgula.";
+    if (string(lexeme) == "}") erro.suggestion = "Verifique se fechou corretamente o bloco anterior.";
     else if (string(lexeme) == "{") erro.suggestion = "Declaração mal formada antes do bloco.";
     else erro.suggestion = "Verifique a sintaxe ou palavras reservadas próximas.";
 
     errorLog.push_back(erro);
-    
-    // Opcional: imprimir stderr se quiser debug em tempo real
-    // fprintf(stderr, "Erro linha %d: %s\n", lineNumber, s);
 }
 
 void printSynthesisReport() {
@@ -529,26 +523,25 @@ void printSynthesisReport() {
 }
 
 void printErrorReport() {
+    if (errorLog.empty()) {
+        cout << "\n[SUCESSO] A ontologia está sintaticamente válida!" << endl;
+        return;
+    }
+
     cout << "\n========================================================" << endl;
     cout << "                 RELATÓRIO DE ERROS                     " << endl;
     cout << "========================================================" << endl;
+    cout << "Total de erros encontrados: " << errorLog.size() << endl << endl;
     
-    if (errorLog.empty()) {
-        cout << "Nenhum erro sintático encontrado. A ontologia está válida!" << endl;
-    } else {
-        cout << "Total de erros encontrados: " << errorLog.size() << endl << endl;
-        for (const auto& err : errorLog) {
-            cout << "[ERRO] Linha " << err.line << ", Coluna " << err.col << endl;
-            cout << "       Mensagem: " << err.message << endl;
-            cout << "       Sugestão: " << err.suggestion << endl;
-            cout << "--------------------------------------------------------" << endl;
-        }
+    for (const auto& err : errorLog) {
+        cout << "[ERRO] Linha " << err.line << ", Coluna " << err.col << endl;
+        cout << "       Mensagem: " << err.message << endl;
+        cout << "       Sugestão: " << err.suggestion << endl;
+        cout << "--------------------------------------------------------" << endl;
     }
-    cout << "========================================================" << endl;
 }
 
 void init_maps() {
-    // Mesma inicialização do seu código original...
     mapClassStereotypes = {
         {"relator", CLASS_STEREO}, {"event", CLASS_STEREO}, {"situation", CLASS_STEREO},
         {"process", CLASS_STEREO}, {"category", CLASS_STEREO}, {"mixin", CLASS_STEREO},

@@ -31,9 +31,14 @@ int main(int argc, char **argv) {
     init_maps();
     
     // Inicia o parser
-    yyparse();
+    // O yyparse retorna 0 em caso de SUCESSO.
+    if (yyparse() == 0) {
+        // Sucesso total
+    } else {
+        // Falha no parser
+    }
     
-    // Gera os relatórios finais
+    // Gera os relatórios
     if (errorLog.empty()) {
         printSynthesisReport();
     } 
