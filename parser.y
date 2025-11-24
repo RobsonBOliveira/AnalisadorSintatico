@@ -264,7 +264,7 @@ tipo_referencia:
     ;
 
 declaracao_classe_subkind:
-    CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES REL_STEREO ID
+    CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES SPECIALIZES ID
     {
          if (currentPackage != nullptr) {
             ClassInfo newClass;
@@ -273,7 +273,7 @@ declaracao_classe_subkind:
             currentPackage->classes.push_back(newClass);
         }
     }
-    | CLASS_STEREO ID OF CLASS_STEREO REL_STEREO ID
+    | CLASS_STEREO ID OF CLASS_STEREO SPECIALIZES ID
     ;
 
 declaracao_datatype:
@@ -368,14 +368,14 @@ opt_has:
     ;
     
 declaracao_relacao_externa:
-    RELATION REL_STEREO corpo_relacao_externa
+    REL_STEREO opt_rel_stereo corpo_relacao_externa
     {
         RelationInfo ri;
         ri.stereotype = string($2);
         ri.type = "Externa";
         externalRelations.push_back(ri);
     }
-    | RELATION corpo_relacao_externa
+    | REL_STEREO corpo_relacao_externa
     {
         RelationInfo ri;
         ri.stereotype = "N/A";
