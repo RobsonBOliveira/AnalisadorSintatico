@@ -4,319 +4,551 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+#include <vector>
 #include <unordered_map>
+#include <iomanip> // Para formatar a tabela
 
 using namespace std;
+
+/* ========================================================================== */
+/* ESTRUTURAS DE DADOS PARA A SÍNTESE                                         */
+/* ========================================================================== */
+
+struct RelationInfo {
+    string stereotype;
+    string type; // "Interna" ou "Externa"
+    string details; // Ex: "Domínio -> Imagem" ou "Atributo de Classe"
+};
+
+struct ClassInfo {
+    string name;
+    string stereotype;
+    int attributeCount;
+    int internalRelationCount;
+};
+
+struct PackageInfo {
+    string name;
+    vector<ClassInfo> classes;
+};
+
+struct DatatypeInfo {
+    string name;
+    string baseType; // Se for derivado
+};
+
+struct EnumInfo {
+    string name;
+    int literalCount;
+};
+
+struct GensetInfo {
+    string name;
+    string general;
+    int specificCount;
+};
+
+struct ErrorInfo {
+    int line;
+    int col;
+    string message;
+    string suggestion;
+};
+
+/* ========================================================================== */
+/* VARIÁVEIS GLOBAIS DE ARMAZENAMENTO                                         */
+/* ========================================================================== */
+
+vector<PackageInfo> packages;
+vector<RelationInfo> externalRelations;
+vector<DatatypeInfo> datatypes;
+vector<EnumInfo> enums;
+vector<GensetInfo> gensets;
+vector<ErrorInfo> errorLog;
+
+// Contexto atual (para saber onde adicionar classes/relações)
+PackageInfo* currentPackage = nullptr;
+ClassInfo* currentClass = nullptr;
 
 /* Declaração de funções e variáveis externas */
 int yylex(void);
 void yyerror(const char *s);
 FILE *tokenFile;
 
-/* Variáveis globais para rastreamento */
+/* Variáveis do Léxico */
 int lineNumber, columnNumber;
 char typeStr[50], lexeme[100];
 
-/* Mapas para classificação rápida de tokens no yylex */
+/* Mapas */
 unordered_map<string, int> mapReservedWords;
 unordered_map<string, int> mapRelationStereotypes;
 unordered_map<string, int> mapClassStereotypes;
 unordered_map<string, int> mapDatatypes;
 
-/* Inicialização dos mapas (feita no main ou numa função init) */
 void init_maps();
+void printSynthesisReport();
+void printErrorReport();
+
 %}
 
-/* União para valores semânticos (opcional, aqui simplificado para verificação sintática) */
+/* Define que os valores semânticos ($1, $2...) podem ser strings */
 %union {
     char *sval;
 }
 
 /* ========================================================================== */
-/* DECLARAÇÃO DE TOKENS                            */
+/* DECLARAÇÃO DE TOKENS                                                       */
 /* ========================================================================== */
 
-/* Palavras reservadas estruturais */
-    %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
-    %token ENUM DATATYPE RELATION
+%token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
+%token ENUM DATATYPE RELATION
+%token ORDERED CONST DERIVED SUBSETS REDEFINES
 
+/* Tokens com valor semântico (tipo <sval>) */
+%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM STRING_LIT CARDINALITY
 
-    /* Meta Atributos */
-    %token ORDERED CONST DERIVED SUBSETS REDEFINES
+/* Símbolos */
+%token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
+%token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
+%token EOF_TOKEN
 
-    /* Estereótipos (Identificados pelos mapas) */
-    %token CLASS_STEREO        /* ex: kind, role, phase */
-    %token REL_STEREO          /* ex: material, componentOf */
-
-    /* Tipos primitivos */
-    %token NATIVE_TYPE         /* ex: string, int, boolean */
-
-    /* Símbolos e Literais */
-    %token ID
-    %token NUM STRING_LIT
-    %token LBRACE RBRACE       /* { } */
-    %token LBRACKET RBRACKET   /* [ ] */
-    %token COLON               /* : */
-    %token DOT               /* . */
-    %token COMMA               /* , */
-    %token ARROW_ASSOC         /* -- */
-    %token ARROW_AGG           /* <>-- */
-    %token ARROW_COMP          /* <*>-- */
-    %token ARROW_AGG_EXISTENTIAL /* <o>-- */
-    %token CARDINALITY         /* [1..*] */
-    %token EOF_TOKEN
-
-
-    %left ARROW_ASSOC ARROW_AGG ARROW_COMP
-    %%
-
-    /* ========================================================================== */
-    /* REGRAS DA GRAMÁTICA                             */
-    /* ========================================================================== */
-
-    /* 1. O Programa é um conjunto de pacotes */
-    programa:
-        lista_imports lista_pacotes { printf("Sucesso: Especificação TONTO sintaticamente correta.\n"); }
-        ;
-        
-    lista_pacotes:
-        pacote
-        | lista_pacotes pacote
-        ;
-
-    /* 1. Declaração de Pacotes */
-    lista_imports:
-        /* vazio */
-        | lista_imports IMPORT ID
-        ;
-
-    pacote:
-        PACKAGE ID LBRACE conteudo_pacote RBRACE
-        | PACKAGE ID conteudo_pacote 
-        ;
-
-    conteudo_pacote:
-        /* vazio */
-        | conteudo_pacote elemento
-        ;
-
-    elemento:
-        declaracao_classe
-        | declaracao_datatype
-        | declaracao_enum
-        | declaracao_genset
-        | declaracao_relacao_externa
-        | declaracao_classe_subkind
-        ;
-
-    /* 2. Declaração de Classes */
-    declaracao_classe:
-        CLASS_STEREO ID opt_relation LBRACE corpo_classe RBRACE
-        | CLASS_STEREO ID opt_relation
-        ;
-
-    declaracao_classe_subkind:
-        CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES REL_STEREO ID
-        | CLASS_STEREO ID OF CLASS_STEREO REL_STEREO ID
-    ;
-
-    opt_relation:
-        /* vazio */
-        | relation_list
-        ;
-
-    relation_list:
-        REL_STEREO ID
-        | relation_list COMMA ID
-        ;
-
-    /* corpo da classe: lista explícita de membros */
-    corpo_classe:
-        /* vazio */
-        | lista_membros
-        ;
-
-    lista_membros:
-        membro_classe
-        | lista_membros membro_classe
-        ;
-
-    /* membro pode ser atributo OU uma relação (relacao_interna) */
-    membro_classe:
-        atributo
-        | relacao_interna
-        ;
-
-    atributo:
-        ID COLON tipo_referencia { printf("  -> Atributo reconhecido.\n"); }
-        ;
-
-    /* Helper para tipos: pode ser nativo ou um ID de classe/tipo criado */
-    tipo_referencia:
-        NATIVE_TYPE
-        | ID
-        ;
-
-    /* 3. Declaração de Tipos de Dados (Datatypes derivados) */
-    declaracao_datatype:
-        DATATYPE ID LBRACE lista_atributos RBRACE
-        | DATATYPE ID
-        | DATATYPE NATIVE_TYPE
-        ;
-
-    lista_atributos:
-        atributo
-        | lista_atributos atributo
-        ;
-
-    /* 4. Declaração de Classes Enumeradas */
-    declaracao_enum:
-        ENUM ID LBRACE lista_enum RBRACE
-        ;
-
-    lista_enum:
-        ID
-        | lista_enum COMMA ID
-        ;
-
-    /* 5. Generalizações (Gensets) */
-    /* Cobre os dois casos: 'genset Name where...' e 'general Name { ... }' */
-    declaracao_genset:
-        meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
-        | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
-        | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
-        ;
-
-    meta_atributos:
-        /* vazio */
-        | meta_atributos DISJOINT
-        | meta_atributos COMPLETE
-        ;
-
-    lista_ids:
-        ID
-        | lista_ids COMMA ID
-        ;
-
-    /* 6. Declaração de Relações */
-
-    /* Caso Interno: dentro de uma classe (Ex: componentOf <>-- Department) */
-
-    relacao_interna:
-      opt_rel_stereo relacao
-    ;
-
-    relacao:
-        operador_relacao ID operador_relacao cardinalidade_opt ID
-        | CARDINALITY operador_relacao opt_has CARDINALITY ID
-    ;
-
-    opt_has:
-        /* vazio */
-        | HAS operador_relacao
-    ;
-        
-    /* Caso Externo: fora de classes (Ex: relation @mediation ... ) */
-    declaracao_relacao_externa:
-        RELATION REL_STEREO corpo_relacao_externa
-        | RELATION corpo_relacao_externa
-        ;
-
-    /* Define a estrutura solta vista no exemplo 6 */
-    corpo_relacao_externa:
-        /* Pode ser nomeada ou não, o exemplo é flexível, assumindo estrutura básica:
-        Dominio -- Imagem */
-        ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
-        | ID cardinalidade_opt operador_relacao CARDINALITY ID
-        ;
-
-    operador_relacao:
-        ARROW_ASSOC
-        | ARROW_AGG
-        | ARROW_COMP
-        | ARROW_AGG_EXISTENTIAL
-        ;
-
-    opt_rel_stereo:
-        /* vazio */
-        | REL_STEREO
-        ;
-
-    cardinalidade_opt:
-        /* vazio */
-        | LBRACKET NUM RBRACKET
-        | LBRACKET NUM ARROW_ASSOC NUM RBRACKET /* Ex: [1..*] simplificado */
-        | LBRACKET NUM DOT DOT NUM RBRACKET
-        | CARDINALITY
-        ;
+%left ARROW_ASSOC ARROW_AGG ARROW_COMP
 
 %%
 
 /* ========================================================================== */
-/* CÓDIGO C++                                  */
+/* REGRAS DA GRAMÁTICA                                                        */
+/* ========================================================================== */
+
+programa:
+    lista_imports lista_pacotes EOF_TOKEN { 
+        // Apenas termina. O main chamará os relatórios.
+    }
+    ;
+    
+lista_imports:
+    /* vazio */
+    | lista_imports IMPORT ID
+    ;
+
+lista_pacotes:
+    pacote
+    | lista_pacotes pacote
+    ;
+
+/* ========================================================================== */
+/* 1. PACOTES                                                                 */
+/* ========================================================================== */
+pacote:
+    PACKAGE ID 
+    {
+        // Inicia novo contexto de pacote
+        PackageInfo newPkg;
+        newPkg.name = string($2);
+        packages.push_back(newPkg);
+        // Aponta currentPackage para o último elemento inserido
+        currentPackage = &packages.back();
+    }
+    LBRACE conteudo_pacote RBRACE
+    {
+        currentPackage = nullptr; // Limpa contexto
+    }
+    | PACKAGE ID conteudo_pacote 
+    {
+        // Caso sem chaves (menos comum, mas suportado na gramática original)
+        PackageInfo newPkg;
+        newPkg.name = string($2);
+        packages.push_back(newPkg);
+    }
+    ;
+
+conteudo_pacote:
+    /* vazio */
+    | conteudo_pacote elemento
+    ;
+
+elemento:
+    declaracao_classe
+    | declaracao_datatype
+    | declaracao_enum
+    | declaracao_genset
+    | declaracao_relacao_externa
+    | declaracao_classe_subkind
+    ;
+
+/* ========================================================================== */
+/* 2. CLASSES                                                                 */
+/* ========================================================================== */
+declaracao_classe:
+    CLASS_STEREO ID opt_relation LBRACE 
+    {
+        if (currentPackage != nullptr) {
+            ClassInfo newClass;
+            newClass.name = string($2);
+            newClass.stereotype = string($1);
+            newClass.attributeCount = 0;
+            newClass.internalRelationCount = 0;
+            currentPackage->classes.push_back(newClass);
+            currentClass = &currentPackage->classes.back();
+        }
+    }
+    corpo_classe RBRACE
+    {
+        currentClass = nullptr;
+    }
+    | CLASS_STEREO ID opt_relation
+    {
+        if (currentPackage != nullptr) {
+            ClassInfo newClass;
+            newClass.name = string($2);
+            newClass.stereotype = string($1);
+            newClass.attributeCount = 0;
+            newClass.internalRelationCount = 0;
+            currentPackage->classes.push_back(newClass);
+        }
+    }
+    ;
+
+declaracao_classe_subkind:
+    CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES REL_STEREO ID
+    {
+         if (currentPackage != nullptr) {
+            ClassInfo newClass;
+            newClass.name = string($2);
+            newClass.stereotype = string($1); // Provavelmente "subkind"
+            currentPackage->classes.push_back(newClass);
+        }
+    }
+    | CLASS_STEREO ID OF CLASS_STEREO REL_STEREO ID
+    ;
+
+opt_relation:
+    /* vazio */
+    | relation_list
+    ;
+
+relation_list:
+    REL_STEREO ID
+    | relation_list COMMA ID
+    ;
+
+corpo_classe:
+    /* vazio */
+    | lista_membros
+    ;
+
+lista_membros:
+    membro_classe
+    | lista_membros membro_classe
+    ;
+
+membro_classe:
+    atributo
+    | relacao_interna
+    ;
+
+atributo:
+    ID COLON tipo_referencia 
+    { 
+        if (currentClass != nullptr) {
+            currentClass->attributeCount++;
+        }
+    }
+    ;
+
+tipo_referencia:
+    NATIVE_TYPE
+    | ID
+    ;
+
+/* ========================================================================== */
+/* 3. DATATYPES                                                               */
+/* ========================================================================== */
+declaracao_datatype:
+    DATATYPE ID LBRACE lista_atributos RBRACE
+    {
+        DatatypeInfo dt;
+        dt.name = string($2);
+        dt.baseType = "Complexo (Struct)";
+        datatypes.push_back(dt);
+    }
+    | DATATYPE ID
+    | DATATYPE NATIVE_TYPE
+    ;
+
+lista_atributos:
+    atributo
+    | lista_atributos atributo
+    ;
+
+/* ========================================================================== */
+/* 4. ENUMS                                                                   */
+/* ========================================================================== */
+declaracao_enum:
+    ENUM ID LBRACE lista_enum RBRACE
+    {
+        // Contar quantos itens tem na lista_enum é difícil aqui sem uma ação no meio
+        // Simplificação: apenas registrar o enum
+        EnumInfo ei;
+        ei.name = string($2);
+        ei.literalCount = -1; // Indefinido nesta lógica simples
+        enums.push_back(ei);
+    }
+    ;
+
+lista_enum:
+    ID
+    | lista_enum COMMA ID
+    ;
+
+/* ========================================================================== */
+/* 5. GENSETS                                                                 */
+/* ========================================================================== */
+declaracao_genset:
+    meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
+    {
+        GensetInfo gi;
+        gi.name = string($3);
+        gi.general = string($6);
+        gensets.push_back(gi);
+    }
+    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
+    | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
+    {
+        GensetInfo gi;
+        gi.name = "Unnamed";
+        gi.general = string($2);
+        gensets.push_back(gi);
+    }
+    ;
+
+meta_atributos:
+    /* vazio */
+    | meta_atributos DISJOINT
+    | meta_atributos COMPLETE
+    ;
+
+lista_ids:
+    ID
+    | lista_ids COMMA ID
+    ;
+
+/* ========================================================================== */
+/* 6. RELAÇÕES                                                                */
+/* ========================================================================== */
+
+/* Interna */
+relacao_interna:
+    opt_rel_stereo relacao
+    {
+        if (currentClass != nullptr) {
+            currentClass->internalRelationCount++;
+        }
+    }
+    ;
+
+relacao:
+    operador_relacao ID operador_relacao cardinalidade_opt ID
+    | CARDINALITY operador_relacao opt_has CARDINALITY ID
+    ;
+
+opt_has:
+    /* vazio */
+    | HAS operador_relacao
+    ;
+    
+/* Externa */
+declaracao_relacao_externa:
+    RELATION REL_STEREO corpo_relacao_externa
+    {
+        RelationInfo ri;
+        ri.stereotype = string($2);
+        ri.type = "Externa";
+        externalRelations.push_back(ri);
+    }
+    | RELATION corpo_relacao_externa
+    {
+        RelationInfo ri;
+        ri.stereotype = "N/A";
+        ri.type = "Externa";
+        externalRelations.push_back(ri);
+    }
+    ;
+
+corpo_relacao_externa:
+    ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
+    | ID cardinalidade_opt operador_relacao CARDINALITY ID
+    ;
+
+operador_relacao:
+    ARROW_ASSOC
+    | ARROW_AGG
+    | ARROW_COMP
+    | ARROW_AGG_EXISTENTIAL
+    ;
+
+opt_rel_stereo:
+    /* vazio */
+    | REL_STEREO
+    ;
+
+cardinalidade_opt:
+    /* vazio */
+    | LBRACKET NUM RBRACKET
+    | LBRACKET NUM ARROW_ASSOC NUM RBRACKET 
+    | LBRACKET NUM DOT DOT NUM RBRACKET
+    | CARDINALITY
+    ;
+
+%%
+
+/* ========================================================================== */
+/* CÓDIGO C++                                                                 */
 /* ========================================================================== */
 
 int yylex(void) {
-    /* Formato esperado: LINHA COLUNA TIPO LEXEMA */
     if (fscanf(tokenFile, "%d %d %s %s", 
                &lineNumber, &columnNumber, typeStr, lexeme) != 4) {
-        return 0; // Fim do arquivo
+        return 0; 
     }
-
-    // Debug opcional
-    printf("Lendo: %s (%s)\n", lexeme, typeStr);
 
     string lex(lexeme);
 
-    /* 1. Verifica Símbolos Especiais (mapeamento direto) */
+    /* Símbolos Especiais */
     if (lex == "{") return LBRACE;
     if (lex == "}") return RBRACE;
     if (lex == "[") return LBRACKET;
     if (lex == "]") return RBRACKET;
     if (lex == ":") return COLON;
     if (lex == ",") return COMMA;
+    if (lex == ".") return DOT;
     if (lex == "--") return ARROW_ASSOC;
     if (lex == "<>--") return ARROW_AGG;
     if (lex == "<o>--") return ARROW_AGG_EXISTENTIAL;
     
-    /* 2. Verifica Estereótipos de Classe */
+    /* Estereótipos de Classe (SALVA O NOME) */
     if (mapClassStereotypes.find(lex) != mapClassStereotypes.end()) {
+        yylval.sval = strdup(lexeme); // IMPORTANTE: Copia string para uso no parser
         return CLASS_STEREO;
     }
     
-    /* 3. Verifica Estereótipos de Relação (com ou sem @) */
+    /* Estereótipos de Relação */
     string cleanLex = lex;
-    if (lex == "@") return yylex(); // simplesmente ignore o token '@'
-    if (lex[0] == '@') cleanLex = lex.substr(1); // ex: @mediation vira mediation
+    if (lex == "@") return yylex(); 
+    if (lex[0] == '@') cleanLex = lex.substr(1);
+    
     if (mapRelationStereotypes.find(cleanLex) != mapRelationStereotypes.end()) {
+        yylval.sval = strdup(cleanLex.c_str());
         return REL_STEREO;
     }
 
-    /* 4. Verifica Palavras Reservadas (package, genset, etc) */
+    /* Palavras Reservadas */
     if (mapReservedWords.find(lex) != mapReservedWords.end()) {
         return mapReservedWords[lex];
     }
 
-    /* 5. Verifica Tipos Nativos */
+    /* Tipos Nativos */
     if (mapDatatypes.find(lex) != mapDatatypes.end()) {
+        yylval.sval = strdup(lexeme);
         return NATIVE_TYPE;
     }
 
-    /* 6. Verifica Tokens Genéricos baseados no TIPO vindo do arquivo */
-    if (strcmp(typeStr, "NUM") == 0) return NUM;
-    if (strcmp(typeStr, "Cardinality") == 0) return CARDINALITY;
+    /* Genéricos */
+    if (strcmp(typeStr, "NUM") == 0) {
+        yylval.sval = strdup(lexeme);
+        return NUM;
+    }
+    if (strcmp(typeStr, "Cardinality") == 0) {
+        yylval.sval = strdup(lexeme);
+        return CARDINALITY;
+    }
     if (strcmp(typeStr, "EOF") == 0) return EOF_TOKEN;
     
-    /* Se não for nenhum dos acima e for um identificador */
+    /* Identificadores (SALVA O NOME) */
+    yylval.sval = strdup(lexeme);
     return ID;
 }
 
+/* Tratamento de Erro Melhorado */
 void yyerror(const char *s) {
-    fprintf(stderr, "Erro sintático na linha %d, coluna %d: %s (Token: %s)\n", 
-            lineNumber, columnNumber, s, lexeme);
+    ErrorInfo erro;
+    erro.line = lineNumber;
+    erro.col = columnNumber;
+    erro.message = string(s) + " (Token: " + string(lexeme) + ")";
+    
+    // Sugestões simples baseadas no último token lido
+    if (string(lexeme) == "}") erro.suggestion = "Verifique se fechou corretamente o bloco anterior ou se falta ponto e vírgula.";
+    else if (string(lexeme) == "{") erro.suggestion = "Declaração mal formada antes do bloco.";
+    else erro.suggestion = "Verifique a sintaxe ou palavras reservadas próximas.";
+
+    errorLog.push_back(erro);
+    
+    // Opcional: imprimir stderr se quiser debug em tempo real
+    // fprintf(stderr, "Erro linha %d: %s\n", lineNumber, s);
+}
+
+void printSynthesisReport() {
+    cout << "\n========================================================" << endl;
+    cout << "             RELATÓRIO DE SÍNTESE DA ONTOLOGIA            " << endl;
+    cout << "========================================================" << endl;
+
+    cout << "\n[1] ESTATÍSTICAS GERAIS" << endl;
+    cout << "Pacotes encontrados: " << packages.size() << endl;
+    cout << "Datatypes definidos: " << datatypes.size() << endl;
+    cout << "Enums definidos:     " << enums.size() << endl;
+    cout << "Gensets definidos:   " << gensets.size() << endl;
+    cout << "Relações Externas:   " << externalRelations.size() << endl;
+
+    cout << "\n[2] DETALHAMENTO POR PACOTE" << endl;
+    if (packages.empty()) cout << "Nenhum pacote encontrado." << endl;
+    
+    for (const auto& pkg : packages) {
+        cout << "+ Pacote '" << pkg.name << "':" << endl;
+        cout << "  - Classes: " << pkg.classes.size() << endl;
+        if (pkg.classes.empty()) {
+            cout << "    (Nenhuma classe)" << endl;
+        } else {
+            cout << left << setw(20) << "    Nome" << setw(15) << "Stereotype" << setw(10) << "Atributos" << "Rels. Internas" << endl;
+            cout << "    --------------------------------------------------------------" << endl;
+            for (const auto& cls : pkg.classes) {
+                cout << "    " << left << setw(20) << cls.name 
+                     << setw(15) << cls.stereotype 
+                     << setw(10) << cls.attributeCount 
+                     << cls.internalRelationCount << endl;
+            }
+        }
+        cout << endl;
+    }
+
+    if (!externalRelations.empty()) {
+        cout << "[3] RELAÇÕES EXTERNAS" << endl;
+        for (const auto& rel : externalRelations) {
+            cout << "  - Stereotype: " << rel.stereotype << endl;
+        }
+    }
+}
+
+void printErrorReport() {
+    cout << "\n========================================================" << endl;
+    cout << "                 RELATÓRIO DE ERROS                     " << endl;
+    cout << "========================================================" << endl;
+    
+    if (errorLog.empty()) {
+        cout << "Nenhum erro sintático encontrado. A ontologia está válida!" << endl;
+    } else {
+        cout << "Total de erros encontrados: " << errorLog.size() << endl << endl;
+        for (const auto& err : errorLog) {
+            cout << "[ERRO] Linha " << err.line << ", Coluna " << err.col << endl;
+            cout << "       Mensagem: " << err.message << endl;
+            cout << "       Sugestão: " << err.suggestion << endl;
+            cout << "--------------------------------------------------------" << endl;
+        }
+    }
+    cout << "========================================================" << endl;
 }
 
 void init_maps() {
+    // Mesma inicialização do seu código original...
     mapClassStereotypes = {
         {"relator", CLASS_STEREO}, {"event", CLASS_STEREO}, {"situation", CLASS_STEREO},
         {"process", CLASS_STEREO}, {"category", CLASS_STEREO}, {"mixin", CLASS_STEREO},
