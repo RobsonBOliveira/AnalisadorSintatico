@@ -173,7 +173,7 @@ elemento:
 /* CLASSES                                                                    */
 /* ========================================================================== */
 declaracao_classe:
-    CLASS_STEREO ID opt_specialization opt_relation_list_syntax 
+    CLASS_STEREO ID opt_specialization opt_relation_list_syntax opt_corpo_classe
     {
         if (currentPackage != nullptr) {
             bool exists = false;
@@ -193,11 +193,7 @@ declaracao_classe:
             }
         }
     }
-    opt_corpo_classe
-    {
-        currentClass = nullptr;
-    }
-    ;
+    
 
 opt_specialization:
     /* vazio */
@@ -366,7 +362,7 @@ relacao_interna:
     ;
 
 cardinal_relation:
-      CARDINALITY operador_relacao opt_has CARDINALITY ID
+      CARDINALITY operador_relacao opt_id CARDINALITY ID
     {
         if(currentClass != nullptr) {
             InternalRelationInfo rel;
@@ -380,9 +376,15 @@ cardinal_relation:
     }
     ;
 
-opt_has:
+opt_id:
     /* vazio */
-    | HAS operador_relacao
+    |  field operador_relacao
+    ;
+
+field:
+    ID
+    | HAS
+    | REL_STEREO
     ;
     
 declaracao_relacao_externa:
@@ -622,7 +624,7 @@ void init_maps() {
         {"bringsAbout", REL_STEREO}, {"triggers", REL_STEREO},
         {"composition", REL_STEREO}, {"aggregation", REL_STEREO},
         {"inherence", REL_STEREO}, {"value", REL_STEREO}, {"formal", REL_STEREO},
-        {"constitution", REL_STEREO}
+        {"constitution", REL_STEREO}, {"constitutedBy", REL_STEREO}
     };
 
     mapDatatypes = {
