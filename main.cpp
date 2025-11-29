@@ -69,13 +69,14 @@ int main(int argc, char **argv) {
             // Falha no parser
         }
         
-        // Gera os relatórios
-        if (errorLog.empty()) {
-            printSynthesisReport();
-        } 
-        printErrorReport();
-
         fclose(tokenFile);
     }
+
+    // Gera os relatórios
+    if (errorLog.empty()) {
+        printSynthesisReport();
+    } 
+    printErrorReport();
+
     return 0;
 }
