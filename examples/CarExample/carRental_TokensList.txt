@@ -1,5 +1,5 @@
 1 1 Keyword package
-1 9 Package CarRentalPkg
+1 9 Classname CarRental
 3 1 Keyword kind
 3 6 Classname Person
 5 1 Keyword role
