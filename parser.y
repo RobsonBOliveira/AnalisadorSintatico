@@ -6,12 +6,19 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <iomanip> // Para formatar a tabela
+#include <iomanip>
 
 using namespace std;
 
+// Definições de Cores
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
 /* ========================================================================== */
-/* ESTRUTURAS DE DADOS PARA A SÍNTESE                                         */
+/* ESTRUTURAS DE DADOS                                                        */
 /* ========================================================================== */
 
 struct InternalRelationInfo {
@@ -64,7 +71,7 @@ struct ErrorInfo {
 };
 
 /* ========================================================================== */
-/* VARIÁVEIS GLOBAIS DE ARMAZENAMENTO                                         */
+/* VARIÁVEIS GLOBAIS                                                          */
 /* ========================================================================== */
 
 vector<PackageInfo> packages;
@@ -79,7 +86,8 @@ ClassInfo* currentClass = nullptr;
 
 int yylex(void);
 void yyerror(const char *s);
-FILE *tokenFile;
+extern FILE *tokenFile;
+extern std::string currentFileName; // Recebida do main.cpp
 
 int lineNumber, columnNumber;
 char typeStr[50], lexeme[100];
@@ -94,13 +102,13 @@ void printSynthesisReport();
 void printErrorReport();
 
 %}
-
+%define parse.error verbose
 %union {
     char *sval;
 }
 
 /* ========================================================================== */
-/* DECLARAÇÃO DE TOKENS                                                       */
+/* TOKENS                                                                     */
 /* ========================================================================== */
 
 %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
@@ -112,7 +120,7 @@ void printErrorReport();
 %token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
 %token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
 
-%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material
+%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material pacote_header 
 
 %nonassoc EMPTY_CARD   /* Prioridade Baixa: Prefere reduzir vazio */
 %nonassoc CARDINALITY  /* Prioridade Alta:  Prefere deslocar (Shift) o token */
@@ -122,16 +130,18 @@ void printErrorReport();
 %%
 
 /* ========================================================================== */
-/* REGRAS DA GRAMÁTICA                                                        */
+/* GRAMÁTICA COM RECUPERAÇÃO DE ERROS                                         */
 /* ========================================================================== */
 
 programa:
     lista_imports lista_pacotes
     ;
-    
+
 lista_imports:
     /* vazio */
     | lista_imports IMPORT ID
+    /* Recuperação se erro */
+    | lista_imports error ID { yyerrok; yyclearin; } 
     ;
 
 lista_pacotes:
@@ -140,16 +150,30 @@ lista_pacotes:
     ;
 
 pacote:
-    PACKAGE ID 
+    pacote_header
     {
+        /* Ação executada APÓS resolver se o cabeçalho é válido ou erro */
         PackageInfo newPkg;
-        newPkg.name = string($2);
+        if ($1) {
+            newPkg.name = string($1);
+        } else {
+            /* Nome genérico para pacotes com erro de sintaxe */
+            newPkg.name = "[Pacote_Sem_Nome_Linha_" + to_string(lineNumber) + "]";
+        }
         packages.push_back(newPkg);
         currentPackage = &packages.back();
     }
     opt_brace_block
     {
-        currentPackage = nullptr; 
+        currentPackage = nullptr;
+    }
+    ;
+pacote_header:
+    PACKAGE ID { $$ = $2; }
+    | PACKAGE error
+    {
+        yyerrok; 
+        $$ = NULL; // Sinaliza que não houve nome
     }
     ;
 
@@ -161,6 +185,8 @@ opt_brace_block:
 conteudo_pacote:
     /* vazio */
     | conteudo_pacote elemento
+    /* PONTO DE RECUPERAÇÃO: Se um elemento falhar, descarta até achar o próximo válido ou fechar bloco */
+    | conteudo_pacote error
     ;
 
 elemento:
@@ -172,9 +198,7 @@ elemento:
     | declaracao_classe_subkind
     ;
 
-/* ========================================================================== */
-/* CLASSES                                                                    */
-/* ========================================================================== */
+/* CLASSES */
 declaracao_classe:
     CLASS_STEREO ID opt_specialization opt_relation_list_syntax opt_corpo_classe
     {
@@ -184,7 +208,6 @@ declaracao_classe:
                 currentClass = &currentPackage->classes.back();
                 exists = true;
             }
-            
             if (!exists) {
                 ClassInfo newClass;
                 newClass.name = string($2);
@@ -196,7 +219,7 @@ declaracao_classe:
             }
         }
     }
-    
+    ;
 
 opt_specialization:
     /* vazio */
@@ -241,6 +264,8 @@ corpo_classe:
 lista_membros:
     membro_classe
     | lista_membros membro_classe
+    /* PONTO DE RECUPERAÇÃO: Erro dentro da classe (atributo ou relação malformada) */
+    | lista_membros error { yyerrok; }
     ;
 
 membro_classe:
@@ -341,15 +366,14 @@ lista_ids:
     | lista_ids COMMA ID
     ;
 
-/* ========================================================================== */
-/* RELAÇÕES                                                                   */
-/* ========================================================================== */
+/* RELAÇÕES */
 
 relacao_interna:
     opt_rel_stereo simple_relation
   | opt_rel_stereo cardinal_relation
   ;
-  simple_relation:
+
+simple_relation:
       operador_relacao ID operador_relacao cardinalidade_opt ID
     {
         if (currentClass != nullptr) {
@@ -358,7 +382,6 @@ relacao_interna:
             rel.name = string($2);
             rel.cardinality = ($4) ? string($4) : "";
             rel.targetClass = string($5);
-
             currentClass->internalRelations.push_back(rel);
         }
     }
@@ -373,7 +396,6 @@ cardinal_relation:
             rel.name = "";
             rel.cardinality = ($1) ? string($1) : "";
             rel.targetClass = string($5);
-            
             currentClass->internalRelations.push_back(rel);
         }
     }
@@ -381,7 +403,7 @@ cardinal_relation:
 
 opt_id:
     /* vazio */
-    |  field operador_relacao
+    | field operador_relacao
     ;
 
 field:
@@ -399,6 +421,7 @@ declaracao_relacao_externa:
         externalRelations.push_back(ri);
     }
     ;
+
 corpo_relacao_externa:
     ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
     | ID cardinalidade_opt operador_relacao CARDINALITY ID
@@ -449,14 +472,13 @@ cardinalidade_opt:
 /* ========================================================================== */
 
 int yylex(void) {
-    if (fscanf(tokenFile, "%d %d %s %s", 
-               &lineNumber, &columnNumber, typeStr, lexeme) != 4) {
+    if (fscanf(tokenFile, "%d %d %s %s", &lineNumber, &columnNumber, typeStr, lexeme) != 4) {
         return 0; 
     }
 
     string lex(lexeme);
 
-    /* Símbolos Especiais */
+    /* Símbolos Especiais e Palavras Reservadas (Mantido igual ao original) */
     if (lex == "{") return LBRACE;
     if (lex == "}") return RBRACE;
     if (lex == ":") return COLON;
@@ -466,39 +488,32 @@ int yylex(void) {
     if (lex == "<>--") return ARROW_AGG;
     if (lex == "<o>--") return ARROW_AGG_EXISTENTIAL;
     
-    /* TRATAMENTO CORRIGIDO PARA BRACKETS e CARDINALIDADE */
-    /* Se o token for exatamente "[", é LBRACKET */
     if (lex == "[") return LBRACKET;
     if (lex == "]") return RBRACKET;
 
-    /* Se começar com "[", mas não for só "[", assume que é uma cardinalidade agrupada (ex: [1] ou [0..1]) */
     if (lex.length() > 1 && lex[0] == '[') {
          yylval.sval = strdup(lexeme);
          return CARDINALITY;
     }
     
-    /* Estereótipos de Classe */
     if (mapClassStereotypes.find(lex) != mapClassStereotypes.end()) {
-        yylval.sval = strdup(lexeme); 
+        yylval.sval = strdup(lexeme);
         return CLASS_STEREO;
     }
     
-    /* Estereótipos de Relação */
     string cleanLex = lex;
     if (lex == "@") return yylex(); 
     if (lex[0] == '@') cleanLex = lex.substr(1);
-    
+
     if (mapRelationStereotypes.find(cleanLex) != mapRelationStereotypes.end()) {
         yylval.sval = strdup(cleanLex.c_str());
         return REL_STEREO;
     }
 
-    /* Palavras Reservadas */
     if (mapReservedWords.find(lex) != mapReservedWords.end()) {
         return mapReservedWords[lex];
     }
 
-    /* Tipos Nativos */
     if (mapDatatypes.find(lex) != mapDatatypes.end()) {
         yylval.sval = strdup(lexeme);
         return NATIVE_TYPE;
@@ -511,23 +526,41 @@ int yylex(void) {
     
     if (strcmp(typeStr, "EOF") == 0) return 0;
     
-    /* Identificadores */
     yylval.sval = strdup(lexeme);
     return ID;
 }
 
+// TRATAMENTO DE ERROS
 void yyerror(const char *s) {
     ErrorInfo erro;
     erro.line = lineNumber;
     erro.col = columnNumber;
-    erro.message = string(s) + " (Token: " + string(lexeme) + ")";
-    
-    if (string(lexeme) == "}") erro.suggestion = "Verifique se fechou corretamente o bloco anterior.";
-    else if (string(lexeme) == "{") erro.suggestion = "Declaração mal formada antes do bloco.";
-    else if (string(lexeme) == "--") erro.suggestion = "Possível erro na declaração anterior (atributo ou relação incompleta).";
-    else erro.suggestion = "Verifique a sintaxe ou palavras reservadas próximas.";
+    erro.message = string(s);
+
+    // Heurísticas de sugestão baseadas no token atual
+    string currentToken = string(lexeme);
+    if (currentToken == "}") {
+        erro.suggestion = "Verifique se fechou corretamente o bloco anterior ou se há um ';' faltando.";
+    } else if (currentToken == "{") {
+        erro.suggestion = "Declaração anterior pode estar incompleta.";
+    } else if (currentToken == "--" || currentToken == "<>--") {
+        erro.suggestion = "Erro na definição de relação. Verifique a cardinalidade.";
+    } else if (mapReservedWords.find(currentToken) != mapReservedWords.end()) {
+        erro.suggestion = "Palavra reservada encontrada onde era esperado um identificador.";
+    } else {
+        erro.suggestion = "Verifique a sintaxe próxima a este token.";
+    }
 
     errorLog.push_back(erro);
+
+    // IMPRESSÃO FORMATADA "IDE STYLE" NO TERMINAL
+    fprintf(stderr, ANSI_COLOR_RED);
+    fprintf(stderr, "\n[ERROR] %s:%d:%d\n", currentFileName.c_str(), lineNumber, columnNumber);
+    fprintf(stderr, "   %s\n", s); // Mensagem do Bison (ex: syntax error, unexpected X...)
+    fprintf(stderr, ANSI_COLOR_YELLOW);
+    fprintf(stderr, "   -> Lexema encontrado: '%s'\n", currentToken.c_str());
+    fprintf(stderr, "   -> Sugestão: %s\n", erro.suggestion.c_str());
+    fprintf(stderr, ANSI_COLOR_RESET);
 }
 
 void printSynthesisReport() {
@@ -589,21 +622,10 @@ void printSynthesisReport() {
     }
 }
 
-void printErrorReport() {
-    if (errorLog.empty()) {
-        cout << "\n[SUCESSO] A ontologia está sintaticamente válida!" << endl;
-        return;
-    }
 
-    cout << "\n========================================================" << endl;
-    cout << "                 RELATÓRIO DE ERROS                     " << endl;
-    cout << "Total de erros encontrados: " << errorLog.size() << endl;
-    
-    for (const auto& err : errorLog) {
-        cout << "[ERRO] Linha " << err.line << ", Coluna " << err.col << endl;
-        cout << "       " << err.message << endl;
-        cout << "       Dica: " << err.suggestion << endl;
-        cout << "--------------------------------------------------------" << endl;
+void printErrorReport() {
+    if (!errorLog.empty()) {
+        cout << ANSI_COLOR_RED << "\n[RESUMO] A análise finalizou com " << errorLog.size() << " erros." << ANSI_COLOR_RESET << endl;
     }
 }
 
@@ -620,7 +642,6 @@ void init_maps() {
         {"historicalRole", CLASS_STEREO},{"intrinsic-modes", CLASS_STEREO}, 
         {"relators", CLASS_STEREO}
     };
-
     mapRelationStereotypes = {
         {"derivation", REL_STEREO}, {"comparative", REL_STEREO},
         {"mediation", REL_STEREO}, {"characterization", REL_STEREO},
@@ -635,12 +656,10 @@ void init_maps() {
         {"inherence", REL_STEREO}, {"value", REL_STEREO}, {"formal", REL_STEREO},
         {"constitution", REL_STEREO}, {"constitutedBy", REL_STEREO}
     };
-
     mapDatatypes = {
         {"number", NATIVE_TYPE}, {"string", NATIVE_TYPE}, {"boolean", NATIVE_TYPE},
         {"date", NATIVE_TYPE}, {"time", NATIVE_TYPE}, {"datetime", NATIVE_TYPE}
     };
-
     mapReservedWords = {
         {"package", PACKAGE}, {"import", IMPORT}, {"genset", GENSET},
         {"disjoint", DISJOINT}, {"complete", COMPLETE}, {"general", GENERAL},

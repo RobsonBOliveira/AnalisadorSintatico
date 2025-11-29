@@ -2,21 +2,23 @@
 #include <stdlib.h>
 #include <string>
 #include <vector>
-
 #include <dirent.h>
 
+std::string currentFileName = ""; 
 int yyparse(void);
-extern FILE *tokenFile;
+FILE *tokenFile = nullptr;
 extern void init_maps();
+extern void printSynthesisReport();
+extern void printErrorReport();
+
 struct ErrorInfo {
     int line;
     int col;
     std::string message;
     std::string suggestion;
 };
+
 extern std::vector<ErrorInfo> errorLog;
-extern void printSynthesisReport();
-extern void printErrorReport();
 
 bool endsWith(const std::string &str, const std::string &suffix) {
     if (str.length() < suffix.length()) return false;
@@ -37,46 +39,33 @@ int main(int argc, char **argv) {
     }
 
     struct dirent *entry;
+    init_maps();
 
     while((entry = readdir(dir)) != NULL) {
 
         std::string fileName = entry->d_name;
 
-        //Ignora . e ..
-        if(fileName == ".'" || fileName == "..") continue;
-
-        //Verifica se é arquivo TokensList.txt
+        if(fileName == "." || fileName == "..") continue;
         if(!endsWith(fileName, "TokensList.txt")) continue;
 
-        //Monta caminho completo
         std::string fullPath = std::string(directoryPath) + "/" + fileName;
+        currentFileName = fullPath;
 
         printf("Processando arquivo: %s\n", fullPath.c_str());
 
         tokenFile = fopen(fullPath.c_str(), "r");
         if (!tokenFile) {
             perror(("Erro ao abrir arquivo: " + fullPath).c_str());
-            continue; //Tenta com proximo arquivo
+            continue;
         }
 
-        errorLog.clear();
-        init_maps();
-        // Inicia o parser
-        // O yyparse retorna 0 em caso de SUCESSO.
-        if (yyparse() == 0) {
-            // Sucesso total
-        } else {
-            // Falha no parser
-        }
-        
+        yyparse();
         fclose(tokenFile);
+        
     }
-
-    // Gera os relatórios
-    if (errorLog.empty()) {
+    if(errorLog.empty())
         printSynthesisReport();
-    } 
-    printErrorReport();
-
+    else 
+        printErrorReport();
     return 0;
 }
