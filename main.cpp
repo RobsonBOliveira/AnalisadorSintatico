@@ -76,6 +76,6 @@ int main(int argc, char **argv) {
         printErrorReport();
 
         fclose(tokenFile);
-        return 0;
     }
+    return 0;
 }
