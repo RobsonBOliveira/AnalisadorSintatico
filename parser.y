@@ -114,6 +114,9 @@ void printErrorReport();
 
 %type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material
 
+%nonassoc EMPTY_CARD   /* Prioridade Baixa: Prefere reduzir vazio */
+%nonassoc CARDINALITY  /* Prioridade Alta:  Prefere deslocar (Shift) o token */
+
 %left ARROW_ASSOC ARROW_AGG ARROW_COMP
 
 %%
@@ -246,7 +249,7 @@ membro_classe:
     ;
 
 atributo:
-    ID COLON tipo_referencia 
+    ID COLON tipo_referencia cardinalidade_opt
     { 
         if (currentClass != nullptr) {
             currentClass->attributes.push_back(string($1) + " : " + string($3));
@@ -420,7 +423,7 @@ opt_rel_stereo:
     ;
 
 cardinalidade_opt:
-    /* vazio */ { $$ = NULL; }
+    /* vazio */ { $$ = NULL; } %prec EMPTY_CARD
     | LBRACKET NUM RBRACKET 
     { 
         string s = "[" + string($2) + "]";
