@@ -104,15 +104,15 @@ void printErrorReport();
 /* ========================================================================== */
 
 %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
-%token ENUM DATATYPE RELATION
+%token ENUM DATATYPE RELATION 
 %token ORDERED CONST DERIVED SUBSETS REDEFINES
 
-%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM STRING_LIT CARDINALITY 
+%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM STRING_LIT CARDINALITY MATERIAL
 
 %token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
 %token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
 
-%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia
+%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material
 
 %left ARROW_ASSOC ARROW_AGG ARROW_COMP
 
@@ -388,10 +388,10 @@ field:
     ;
     
 declaracao_relacao_externa:
-    RELATION opt_rel_stereo corpo_relacao_externa
+    opt_material RELATION opt_rel_stereo corpo_relacao_externa
     {
         RelationInfo ri;
-        ri.stereotype = $2 ? string($2) : "N/A";
+        ri.stereotype = $3 ? string($3) : "N/A";
         ri.type = "Externa";
         externalRelations.push_back(ri);
     }
@@ -399,6 +399,7 @@ declaracao_relacao_externa:
 corpo_relacao_externa:
     ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
     | ID cardinalidade_opt operador_relacao CARDINALITY ID
+    | ID cardinalidade_opt operador_relacao ID operador_relacao cardinalidade_opt ID
     ;
 
 operador_relacao:
@@ -406,6 +407,11 @@ operador_relacao:
     | ARROW_AGG { $$ = (char*)"<>--"; }
     | ARROW_COMP { $$ = (char*)"<*>--"; }
     | ARROW_AGG_EXISTENTIAL { $$ = (char*)"<o>--"; }
+    ;
+
+opt_material:
+    /* vazio */ { $$ = NULL; }
+    | MATERIAL { $$ = $1; }
     ;
 
 opt_rel_stereo:
@@ -608,12 +614,12 @@ void init_maps() {
         {"quality", CLASS_STEREO}, {"mode", CLASS_STEREO},
         {"intrisicMode", CLASS_STEREO}, {"extrinsicMode", CLASS_STEREO},
         {"subkind", CLASS_STEREO}, {"phase", CLASS_STEREO}, {"role", CLASS_STEREO},
-        {"historicalRole", CLASS_STEREO}, {"material", CLASS_STEREO},
-        {"intrinsic-modes", CLASS_STEREO}, {"relators", CLASS_STEREO}
+        {"historicalRole", CLASS_STEREO},{"intrinsic-modes", CLASS_STEREO}, 
+        {"relators", CLASS_STEREO}
     };
 
     mapRelationStereotypes = {
-        {"material", REL_STEREO}, {"derivation", REL_STEREO}, {"comparative", REL_STEREO},
+        {"derivation", REL_STEREO}, {"comparative", REL_STEREO},
         {"mediation", REL_STEREO}, {"characterization", REL_STEREO},
         {"externalDependence", REL_STEREO}, {"componentOf", REL_STEREO},
         {"memberOf", REL_STEREO}, {"subCollectionOf", REL_STEREO},
@@ -638,6 +644,6 @@ void init_maps() {
         {"specifics", SPECIFICS}, {"where", WHERE},
         {"enum", ENUM}, {"datatype", DATATYPE}, {"relation", RELATION}, {"of", OF},
         {"specializes", SPECIALIZES}, {"functional-complexes", FUNCTIONAL_COMPLEXES},
-        {"has", HAS}
+        {"has", HAS}, {"material", MATERIAL},
     };
 }
