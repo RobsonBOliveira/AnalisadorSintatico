@@ -19,7 +19,7 @@ No **Debian/Ubuntu**:
 
 ```bash
 sudo apt update
-sudo apt install bison
+sudo apt install bison make g++
 ``` 
 ## 🏗️ Compilação
 
@@ -36,3 +36,4 @@ Para rodar o analisador sobre um diretório, use:
 ```bash
 ./parser caminho_diretorio/
 ```
+
