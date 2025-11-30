@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 
 std::string currentFileName = ""; 
 namespace fs = std::filesystem;
@@ -73,7 +74,10 @@ int main(int argc, char **argv) {
     //Verifica e cria diretório "output" e subdiretório especifico para relatório
     fs::path directory = "output";
     
-    fs::path dirName = std::string(directoryPath).substr(11);
+    if(directoryPath[strlen(directoryPath) - 1] == '/' || directoryPath[strlen(directoryPath) - 1] == '\\') {
+        ((char*)directoryPath)[strlen(directoryPath) - 1] = '\0';
+    }
+    fs::path dirName = std::string(directoryPath).substr(std::string(directoryPath).find_last_of("/\\") + 1);
 
     verifyAndCreateDirectory(directory);
     verifyAndCreateDirectory("output/" / dirName);    
