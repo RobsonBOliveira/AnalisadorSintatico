@@ -13,12 +13,12 @@
 %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
 %token ENUM DATATYPE RELATION 
 
-%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM CARDINALITY MATERIAL
+%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM CARDINALITY MATERIAL 
 
 %token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
 %token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
 
-%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material pacote_header 
+%type <sval> cardinalidade_opt opt_rel_stereo operador_relacao tipo_referencia opt_material pacote_header corpo_relacao_externa
 
 %nonassoc EMPTY_CARD   /* Prioridade Baixa: Prefere reduzir vazio */
 %nonassoc CARDINALITY  /* Prioridade Alta:  Prefere deslocar (Shift) o token */
@@ -213,15 +213,22 @@ lista_atributos:
 declaracao_enum:
     ENUM ID LBRACE lista_enum RBRACE
     {
-        EnumInfo ei;
-        ei.name = string($2);
-        enums.push_back(ei);
+        if (currentPackage != nullptr) {
+            EnumInfo ei;
+            ei.name = string($2);
+            ei.literals = tempEnumLiterals;
+            currentPackage->enums.push_back(ei);
+        }
+        tempEnumLiterals.clear();
     }
     ;
 
 lista_enum:
     ID
-    | lista_enum COMMA ID
+    { tempEnumLiterals.push_back(string($1)); }
+    |
+    lista_enum COMMA ID
+    { tempEnumLiterals.push_back(string($3)); }
     ;
 
 declaracao_genset:
@@ -325,17 +332,34 @@ field:
 declaracao_relacao_externa:
     opt_material RELATION opt_rel_stereo corpo_relacao_externa
     {
-        RelationInfo ri;
-        ri.stereotype = $3 ? string($3) : "N/A";
-        ri.type = "Externa";
-        externalRelations.push_back(ri);
+        if (currentPackage != nullptr) {
+            RelationInfo ri;
+            ri.stereotype = $3 ? string($3) : "";
+            ri.type = "Externa";
+            ri.details = string($4);
+            currentPackage->externalRelations.push_back(ri);
+        }
     }
     ;
 
 corpo_relacao_externa:
     ID cardinalidade_opt operador_relacao ID cardinalidade_opt 
-    | ID cardinalidade_opt operador_relacao CARDINALITY ID
-    | ID cardinalidade_opt operador_relacao ID operador_relacao cardinalidade_opt ID
+    {
+        string s = string($1) + " " + ($2?string($2):"") + " " + string($3) + " " + string($4) + " " + ($5?string($5):"");
+        $$ = strdup(s.c_str());
+    }
+    |
+    ID cardinalidade_opt operador_relacao CARDINALITY ID
+    {
+        string s = string($1) + " " + ($2?string($2):"") + " " + string($3) + " " + string($4) + " " + string($5);
+        $$ = strdup(s.c_str());
+    }
+    |
+    ID cardinalidade_opt operador_relacao ID operador_relacao cardinalidade_opt ID
+    {
+        string s = string($1) + " " + ($2?string($2):"") + " " + string($3) + " " + string($4) + " " + string($5) + " " + ($6?string($6):"") + " " + string($7);
+        $$ = strdup(s.c_str());
+    }
     ;
 
 operador_relacao:
@@ -492,7 +516,7 @@ void printSynthesisReport(string dirName) {
         reportFile << "\nPACOTE: " << pkg.name << endl;
         reportFile << "--------------------------------------------------------" << endl;
         
-        if (pkg.classes.empty() && pkg.gensets.empty()) {
+        if (pkg.classes.empty() && pkg.gensets.empty() && pkg.enums.empty() && pkg.externalRelations.empty()) {
             reportFile << "(Pacote vazio)" << endl;
         }
 
@@ -508,34 +532,52 @@ void printSynthesisReport(string dirName) {
             }
             reportFile << endl;
 
-            // Atributos
             if (!cls.attributes.empty()) {
                 reportFile << "  - Atributos: ";
                 for(auto at : cls.attributes) reportFile << at << ", ";
                 reportFile << endl;
             }
 
-            // Relações Internas
             if (!cls.internalRelations.empty()) {
                 reportFile << "  - Relações Internas:" << endl;
                 for(const auto& rel : cls.internalRelations) {
                     reportFile << "    > ";
                     if(!rel.stereotype.empty()) reportFile << "(@" << rel.stereotype << ") ";
-                    
-                    // LÓGICA DE IMPRESSÃO ATUALIZADA
+                    // Ajuste da pergunta anterior (Esquerda -> Nome -> Direita)
                     if(!rel.sourceCardinality.empty()) reportFile << rel.sourceCardinality << " ";
-                    
                     if(!rel.name.empty()) reportFile << rel.name << " ";
-                    else reportFile << "-- "; // Seta visual caso não tenha nome
-                    
+                    else reportFile << "-- ";
                     if(!rel.targetCardinality.empty()) reportFile << rel.targetCardinality << " ";
-                    
                     reportFile << "--> " << rel.targetClass << endl;
                 }
             }
             reportFile << endl;
         }
-        
+
+        // --- ENUMS ---
+        if (!pkg.enums.empty()) {
+            reportFile << "  [Enums]" << endl;
+            for (const auto& en : pkg.enums) {
+                reportFile << "  * Enum '" << en.name << "': ";
+                for (size_t i = 0; i < en.literals.size(); ++i) {
+                    reportFile << en.literals[i] << (i < en.literals.size() - 1 ? ", " : "");
+                }
+                reportFile << endl;
+            }
+            reportFile << endl;
+        }
+
+        // --- RELAÇÕES EXTERNAS ---
+        if (!pkg.externalRelations.empty()) {
+            reportFile << "  [Relações Externas]" << endl;
+            for (const auto& rel : pkg.externalRelations) {
+                reportFile << "  * ";
+                if (!rel.stereotype.empty()) reportFile << "(@" << rel.stereotype << ") ";
+                reportFile << rel.details << endl;
+            }
+            reportFile << endl;
+        }
+
         // --- GENSETS ---
         if (!pkg.gensets.empty()) {
             reportFile << "  [Generalizações / Gensets]" << endl;

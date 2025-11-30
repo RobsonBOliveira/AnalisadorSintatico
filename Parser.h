@@ -21,6 +21,11 @@ using namespace std;
 /* ESTRUTURAS DE DADOS                                                        */
 /* ========================================================================== */
 
+struct EnumInfo {
+    string name;
+    vector<string> literals; // NOVO: Vetor para armazenar os valores do Enum
+};
+
 struct InternalRelationInfo {
     string stereotype;
     string name;
@@ -53,16 +58,13 @@ struct PackageInfo {
     string name;
     vector<ClassInfo> classes;
     vector<GensetInfo> gensets;
+    vector<EnumInfo> enums;
+    vector<RelationInfo> externalRelations;
 };
 
 struct DatatypeInfo {
     string name;
     string baseType; 
-};
-
-struct EnumInfo {
-    string name;
-    int literalCount;
 };
 
 struct ErrorInfo {
@@ -90,6 +92,7 @@ vector<RelationInfo> externalRelations;
 vector<DatatypeInfo> datatypes;
 vector<EnumInfo> enums;
 vector<string> tempSpecifics;
+vector<string> tempEnumLiterals;
 vector<ErrorInfo> errorLog;
 unordered_map<string, int> mapRelationStereotypes;
 unordered_map<string, int> mapDatatypes;
