@@ -284,37 +284,32 @@ lista_ids:
 
 /* RELAÇÕES */
 relacao_interna:
-    opt_rel_stereo simple_relation
-  | opt_rel_stereo cardinal_relation
-  ;
-
-simple_relation:
-      operador_relacao ID operador_relacao cardinalidade_opt ID
+    opt_rel_stereo operador_relacao ID operador_relacao cardinalidade_opt ID
     {
         if (currentClass != nullptr) {
             InternalRelationInfo rel;
-            rel.stereotype = ($<sval>1) ? string($1) : "";
-            rel.name = string($2);
-            rel.cardinality = ($4) ? string($4) : "";
-            rel.targetClass = string($5);
+            rel.stereotype = ($1) ? string($1) : ""; 
+            rel.name = string($3);
+            rel.sourceCardinality = "";
+            rel.targetCardinality = ($5) ? string($5) : "";
+            rel.targetClass = string($6);
             currentClass->internalRelations.push_back(rel);
         }
     }
-    ;
-
-cardinal_relation:
-      CARDINALITY operador_relacao opt_id CARDINALITY ID
+  |
+    opt_rel_stereo CARDINALITY operador_relacao opt_id CARDINALITY ID
     {
         if(currentClass != nullptr) {
             InternalRelationInfo rel;
-            rel.stereotype = "";
+            rel.stereotype = ($1) ? string($1) : "";
             rel.name = "";
-            rel.cardinality = ($1) ? string($1) : "";
-            rel.targetClass = string($5);
+            rel.sourceCardinality = ($2) ? string($2) : "";
+            rel.targetCardinality = ($5) ? string($5) : "";
+            rel.targetClass = string($6);
             currentClass->internalRelations.push_back(rel);
         }
     }
-    ;
+  ;
 
 opt_id:
     /* vazio */
@@ -487,7 +482,6 @@ void printSynthesisReport(string dirName) {
     reportFile << "Pacotes:    " << packages.size() << endl;
     reportFile << "Datatypes:  " << datatypes.size() << endl;
     
-    // Conta total de gensets somando de todos os pacotes
     int totalGensets = 0;
     for(const auto& pkg : packages) totalGensets += pkg.gensets.size();
     reportFile << "Gensets:    " << totalGensets << endl;
@@ -527,13 +521,22 @@ void printSynthesisReport(string dirName) {
                 for(const auto& rel : cls.internalRelations) {
                     reportFile << "    > ";
                     if(!rel.stereotype.empty()) reportFile << "(@" << rel.stereotype << ") ";
-                    reportFile << rel.name << " " << rel.cardinality << " --> " << rel.targetClass << endl;
+                    
+                    // LÓGICA DE IMPRESSÃO ATUALIZADA
+                    if(!rel.sourceCardinality.empty()) reportFile << rel.sourceCardinality << " ";
+                    
+                    if(!rel.name.empty()) reportFile << rel.name << " ";
+                    else reportFile << "-- "; // Seta visual caso não tenha nome
+                    
+                    if(!rel.targetCardinality.empty()) reportFile << rel.targetCardinality << " ";
+                    
+                    reportFile << "--> " << rel.targetClass << endl;
                 }
             }
             reportFile << endl;
         }
-
-        // --- GENSETS (Agora impressos dentro do pacote) ---
+        
+        // --- GENSETS ---
         if (!pkg.gensets.empty()) {
             reportFile << "  [Generalizações / Gensets]" << endl;
             for (const auto& gs : pkg.gensets) {

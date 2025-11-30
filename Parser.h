@@ -24,7 +24,8 @@ using namespace std;
 struct InternalRelationInfo {
     string stereotype;
     string name;
-    string cardinality;
+    string sourceCardinality;
+    string targetCardinality;
     string targetClass;
 };
 
