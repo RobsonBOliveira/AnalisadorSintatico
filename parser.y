@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <iomanip>
+#include <fstream>
 
 using namespace std;
 
@@ -83,6 +84,8 @@ vector<ErrorInfo> errorLog;
 
 PackageInfo* currentPackage = nullptr;
 ClassInfo* currentClass = nullptr;
+
+ofstream reportFile;
 
 int yylex(void);
 void yyerror(const char *s);
@@ -563,70 +566,80 @@ void yyerror(const char *s) {
     fprintf(stderr, ANSI_COLOR_RESET);
 }
 
-void printSynthesisReport() {
-    cout << "\n========================================================" << endl;
-    cout << "             RELATÓRIO DE SÍNTESE DA ONTOLOGIA            " << endl;
-    cout << "========================================================" << endl;
+void printSynthesisReport(string dirName) {
 
-    cout << "\n[1] ESTATÍSTICAS GERAIS" << endl;
-    cout << "Pacotes:    " << packages.size() << endl;
-    cout << "Datatypes:  " << datatypes.size() << endl;
-    cout << "Gensets:    " << gensets.size() << endl;
+    string reportPath = "output/" + dirName + "/" + dirName +  "_Syntax_analysis.txt";
 
-    cout << "\n[2] DETALHAMENTO POR PACOTE E CLASSES" << endl;
+    reportFile.open(reportPath);
+    reportFile << "\n========================================================" << endl;
+    reportFile << "             RELATÓRIO DE SÍNTESE DA ONTOLOGIA            " << endl;
+    reportFile << "========================================================" << endl;
+
+    reportFile << "\n[1] ESTATÍSTICAS GERAIS" << endl;
+    reportFile << "Pacotes:    " << packages.size() << endl;
+    reportFile << "Datatypes:  " << datatypes.size() << endl;
+    reportFile << "Gensets:    " << gensets.size() << endl;
+
+    reportFile << "\n[2] DETALHAMENTO POR PACOTE E CLASSES" << endl;
     
     for (const auto& pkg : packages) {
-        cout << "\nPACOTE: " << pkg.name << endl;
-        cout << "--------------------------------------------------------" << endl;
+        reportFile << "\nPACOTE: " << pkg.name << endl;
+        reportFile << "--------------------------------------------------------" << endl;
         
         if (pkg.classes.empty()) {
-            cout << "(Nenhuma classe neste pacote)" << endl;
+            reportFile << "(Nenhuma classe neste pacote)" << endl;
         }
 
         for (const auto& cls : pkg.classes) {
-            cout << "* Classe [" << cls.stereotype << "] " << cls.name;
+            reportFile << "* Classe [" << cls.stereotype << "] " << cls.name;
             if (!cls.parents.empty()) {
-                cout << " (Herda de: ";
+                reportFile << " (Herda de: ";
                 for (size_t i = 0; i < cls.parents.size(); ++i) {
-                    cout << cls.parents[i] << (i < cls.parents.size() - 1 ? ", " : "");
+                    reportFile << cls.parents[i] << (i < cls.parents.size() - 1 ? ", " : "");
                 }
-                cout << ")";
+                reportFile << ")";
             }
-            cout << endl;
+            reportFile << endl;
             
             // Atributos
             if (!cls.attributes.empty()) {
-                cout << "  - Atributos: ";
-                for(auto at : cls.attributes) cout << at << ", ";
-                cout << endl;
+                reportFile << "  - Atributos: ";
+                for(auto at : cls.attributes) reportFile << at << ", ";
+                reportFile << endl;
             }
 
             // Relações Internas
             if (!cls.internalRelations.empty()) {
-                cout << "  - Relações Internas:" << endl;
+                reportFile << "  - Relações Internas:" << endl;
                 for(const auto& rel : cls.internalRelations) {
-                    cout << "    > ";
-                    if(!rel.stereotype.empty()) cout << "(@" << rel.stereotype << ") ";
-                    cout << rel.name << " " << rel.cardinality << " --> " << rel.targetClass << endl;
+                    reportFile << "    > ";
+                    if(!rel.stereotype.empty()) reportFile << "(@" << rel.stereotype << ") ";
+                    reportFile << rel.name << " " << rel.cardinality << " --> " << rel.targetClass << endl;
                 }
             }
-            cout << endl;
+            reportFile << endl;
         }
     }
     
     if (!gensets.empty()) {
-        cout << "\n[3] GENSETS (GENERALIZAÇÕES)" << endl;
+        reportFile << "\n[3] GENSETS (GENERALIZAÇÕES)" << endl;
         for (const auto& gs : gensets) {
-            cout << "* Genset '" << gs.name << "' (General: " << gs.general << ")" << endl;
+            reportFile << "* Genset '" << gs.name << "' (General: " << gs.general << ")" << endl;
         }
     }
+    reportFile.close();
 }
 
 
-void printErrorReport() {
+void printErrorReport(string dirName) {
     if (!errorLog.empty()) {
-        cout << ANSI_COLOR_RED << "\n[RESUMO] A análise finalizou com " << errorLog.size() << " erros." << ANSI_COLOR_RESET << endl;
+    string reportPath = "output/" + dirName + "/" + "_Syntax_analysis.txt";
+
+    reportFile.open(reportPath);
+        reportFile << ANSI_COLOR_RED << "\n[RESUMO] A análise finalizou com " << errorLog.size() << " erros." << ANSI_COLOR_RESET << endl;
+    reportFile.close();
     }
+
 }
 
 void init_maps() {

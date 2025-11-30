@@ -3,13 +3,16 @@
 #include <string>
 #include <vector>
 #include <dirent.h>
+#include <filesystem>
+#include <fstream>
 
 std::string currentFileName = ""; 
+namespace fs = std::filesystem;
 int yyparse(void);
 FILE *tokenFile = nullptr;
 extern void init_maps();
-extern void printSynthesisReport();
-extern void printErrorReport();
+extern void printSynthesisReport(std::string dirName);
+extern void printErrorReport(std::string dirName);
 
 struct ErrorInfo {
     int line;
@@ -18,7 +21,10 @@ struct ErrorInfo {
     std::string suggestion;
 };
 
+void verifyAndCreateDirectory(const fs::path &path);
+
 extern std::vector<ErrorInfo> errorLog;
+extern std::ofstream reportFile;
 
 bool endsWith(const std::string &str, const std::string &suffix) {
     if (str.length() < suffix.length()) return false;
@@ -63,9 +69,30 @@ int main(int argc, char **argv) {
         fclose(tokenFile);
         
     }
+
+    //Verifica e cria diretório "output" e subdiretório especifico para relatório
+    fs::path directory = "output";
+    
+    fs::path dirName = std::string(directoryPath).substr(11);
+
+    verifyAndCreateDirectory(directory);
+    verifyAndCreateDirectory("output/" / dirName);    
+
     if(errorLog.empty())
-        printSynthesisReport();
+        printSynthesisReport(dirName.string());
     else 
-        printErrorReport();
+        printErrorReport(dirName.string());
     return 0;
+}
+
+void verifyAndCreateDirectory(const fs::path &path) {
+    try{
+        if(!fs::exists(path)) {
+            fs::create_directories(path);
+        }
+    }catch(const fs::filesystem_error &e) {
+        fprintf(stderr, "Erro ao criar diretório: %s\n", e.what());
+        exit(1);
+    }
+
 }
