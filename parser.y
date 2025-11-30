@@ -631,13 +631,11 @@ void printSynthesisReport(string dirName) {
 }
 
 
-void printErrorReport(string dirName) {
+void printErrorReport() {
     if (!errorLog.empty()) {
-    string reportPath = "output/" + dirName + "/" + "_Syntax_analysis.txt";
 
-    reportFile.open(reportPath);
-        reportFile << ANSI_COLOR_RED << "\n[RESUMO] A análise finalizou com " << errorLog.size() << " erros." << ANSI_COLOR_RESET << endl;
-    reportFile.close();
+        cout << ANSI_COLOR_RED << "\n[RESUMO] A análise finalizou com " << errorLog.size() << " erros." << ANSI_COLOR_RESET << endl;
+
     }
 
 }

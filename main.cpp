@@ -12,7 +12,7 @@ int yyparse(void);
 FILE *tokenFile = nullptr;
 extern void init_maps();
 extern void printSynthesisReport(std::string dirName);
-extern void printErrorReport(std::string dirName);
+extern void printErrorReport();
 
 struct ErrorInfo {
     int line;
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     if(errorLog.empty())
         printSynthesisReport(dirName.string());
     else 
-        printErrorReport(dirName.string());
+        printErrorReport();
     return 0;
 }
 
