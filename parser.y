@@ -116,9 +116,8 @@ void printErrorReport();
 
 %token PACKAGE IMPORT GENSET DISJOINT COMPLETE GENERAL SPECIFICS WHERE FUNCTIONAL_COMPLEXES OF SPECIALIZES HAS
 %token ENUM DATATYPE RELATION 
-%token ORDERED CONST DERIVED SUBSETS REDEFINES
 
-%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM STRING_LIT CARDINALITY MATERIAL
+%token <sval> CLASS_STEREO REL_STEREO NATIVE_TYPE ID NUM CARDINALITY MATERIAL
 
 %token LBRACE RBRACE LBRACKET RBRACKET COLON DOT COMMA 
 %token ARROW_ASSOC ARROW_AGG ARROW_COMP ARROW_AGG_EXISTENTIAL 
@@ -133,7 +132,7 @@ void printErrorReport();
 %%
 
 /* ========================================================================== */
-/* GRAMÁTICA COM RECUPERAÇÃO DE ERROS                                         */
+/* GRAMÁTICA                                                                  */
 /* ========================================================================== */
 
 programa:
@@ -203,27 +202,23 @@ elemento:
 
 /* CLASSES */
 declaracao_classe:
-    CLASS_STEREO ID opt_specialization opt_relation_list_syntax opt_corpo_classe
+    cabecalho_classe opt_specialization opt_relation_list_syntax opt_corpo_classe
+    ;
+cabecalho_classe:
+    CLASS_STEREO ID
     {
         if (currentPackage != nullptr) {
-            bool exists = false;
-            if (!currentPackage->classes.empty() && currentPackage->classes.back().name == string($2)) {
-                currentClass = &currentPackage->classes.back();
-                exists = true;
-            }
-            if (!exists) {
-                ClassInfo newClass;
-                newClass.name = string($2);
-                newClass.stereotype = string($1);
-                currentPackage->classes.push_back(newClass);
-                currentClass = &currentPackage->classes.back();
-            } else {
-                currentClass->stereotype = string($1);
-            }
+            // Cria a nova classe e adiciona ao pacote agora
+            ClassInfo newClass;
+            newClass.name = string($2);
+            newClass.stereotype = string($1);
+            currentPackage->classes.push_back(newClass);
+            
+            // Atualiza o ponteiro currentClass para esta nova classe
+            currentClass = &currentPackage->classes.back();
         }
     }
     ;
-
 opt_specialization:
     /* vazio */
     | SPECIALIZES lista_pais
@@ -291,16 +286,15 @@ tipo_referencia:
     ;
 
 declaracao_classe_subkind:
-    CLASS_STEREO ID OF FUNCTIONAL_COMPLEXES SPECIALIZES ID
+    cabecalho_classe OF FUNCTIONAL_COMPLEXES SPECIALIZES ID
     {
-         if (currentPackage != nullptr) {
-            ClassInfo newClass;
-            newClass.name = string($2);
-            newClass.stereotype = string($1); 
-            currentPackage->classes.push_back(newClass);
+        // Se desejar capturar a herança definida aqui também (o original ignorava):
+        if (currentClass != nullptr) {
+             currentClass->parents.push_back(string($5));
         }
     }
-    | CLASS_STEREO ID OF CLASS_STEREO SPECIALIZES ID
+    |
+    cabecalho_classe OF CLASS_STEREO SPECIALIZES ID
     ;
 
 declaracao_datatype:
@@ -370,7 +364,6 @@ lista_ids:
     ;
 
 /* RELAÇÕES */
-
 relacao_interna:
     opt_rel_stereo simple_relation
   | opt_rel_stereo cardinal_relation
@@ -469,11 +462,9 @@ cardinalidade_opt:
     ;
 
 %%
-
 /* ========================================================================== */
 /* CÓDIGO C++                                                                 */
 /* ========================================================================== */
-
 int yylex(void) {
     if (fscanf(tokenFile, "%d %d %s %s", &lineNumber, &columnNumber, typeStr, lexeme) != 4) {
         return 0; 
@@ -533,7 +524,6 @@ int yylex(void) {
     return ID;
 }
 
-// TRATAMENTO DE ERROS
 void yyerror(const char *s) {
     ErrorInfo erro;
     erro.line = lineNumber;
@@ -629,7 +619,6 @@ void printSynthesisReport(string dirName) {
     }
     reportFile.close();
 }
-
 
 void printErrorReport() {
     if (!errorLog.empty()) {
