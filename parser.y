@@ -1,109 +1,5 @@
 %{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <iostream>
-#include <string>
-#include <vector>
-#include <unordered_map>
-#include <iomanip>
-#include <fstream>
-
-using namespace std;
-
-// Definições de Cores
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-
-/* ========================================================================== */
-/* ESTRUTURAS DE DADOS                                                        */
-/* ========================================================================== */
-
-struct InternalRelationInfo {
-    string stereotype;
-    string name;
-    string cardinality;
-    string targetClass;
-};
-
-struct RelationInfo {
-    string stereotype;
-    string type; 
-    string details; 
-};
-
-struct ClassInfo {
-    string name;
-    string stereotype;
-    vector<string> parents;
-    vector<string> attributes;
-    vector<InternalRelationInfo> internalRelations;
-};
-
-struct PackageInfo {
-    string name;
-    vector<ClassInfo> classes;
-};
-
-struct DatatypeInfo {
-    string name;
-    string baseType; 
-};
-
-struct EnumInfo {
-    string name;
-    int literalCount;
-};
-
-struct GensetInfo {
-    string name;
-    string general;
-    vector<string> specifics;
-};
-
-struct ErrorInfo {
-    int line;
-    int col;
-    string message;
-    string suggestion;
-};
-
-/* ========================================================================== */
-/* VARIÁVEIS GLOBAIS                                                          */
-/* ========================================================================== */
-
-vector<PackageInfo> packages;
-vector<RelationInfo> externalRelations;
-vector<DatatypeInfo> datatypes;
-vector<EnumInfo> enums;
-vector<GensetInfo> gensets;
-vector<ErrorInfo> errorLog;
-
-PackageInfo* currentPackage = nullptr;
-ClassInfo* currentClass = nullptr;
-
-ofstream reportFile;
-
-int yylex(void);
-void yyerror(const char *s);
-extern FILE *tokenFile;
-extern std::string currentFileName; // Recebida do main.cpp
-
-int lineNumber, columnNumber;
-char typeStr[50], lexeme[100];
-
-unordered_map<string, int> mapReservedWords;
-unordered_map<string, int> mapRelationStereotypes;
-unordered_map<string, int> mapClassStereotypes;
-unordered_map<string, int> mapDatatypes;
-
-void init_maps();
-void printSynthesisReport();
-void printErrorReport();
-
+#include "Parser.h"
 %}
 %define parse.error verbose
 %union {
@@ -329,26 +225,47 @@ lista_enum:
     ;
 
 declaracao_genset:
-    meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS lista_ids
+    meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS 
+    { tempSpecifics.clear(); } /* Limpa antes de ler a lista */
+    lista_ids
     {
-        GensetInfo gi;
-        gi.name = string($3);
-        gi.general = string($6);
-        gensets.push_back(gi);
+        if (currentPackage != nullptr) {
+            GensetInfo gi;
+            gi.name = string($3);
+            gi.general = string($6);
+            gi.specifics = tempSpecifics; // Salva a lista capturada
+            
+            currentPackage->gensets.push_back(gi);
+        }
+        tempSpecifics.clear();
     }
-    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS lista_ids RBRACE
+    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS 
+    { tempSpecifics.clear(); } 
+    lista_ids RBRACE
     {
-        GensetInfo gi;
-        gi.name = string($3);
-        gi.general = string($6);
-        gensets.push_back(gi);
+        if (currentPackage != nullptr) {
+            GensetInfo gi;
+            gi.name = string($3);
+            gi.general = string($6);
+            gi.specifics = tempSpecifics;
+            
+            currentPackage->gensets.push_back(gi);
+        }
+        tempSpecifics.clear();
     }
-    | GENERAL ID LBRACE meta_atributos SPECIFICS lista_ids RBRACE
+    | GENERAL ID LBRACE meta_atributos SPECIFICS 
+    { tempSpecifics.clear(); } 
+    lista_ids RBRACE
     {
-        GensetInfo gi;
-        gi.name = "Unnamed";
-        gi.general = string($2);
-        gensets.push_back(gi);
+        if (currentPackage != nullptr) {
+            GensetInfo gi;
+            gi.name = "Unnamed_Genset"; // Nome padrão
+            gi.general = string($2);
+            gi.specifics = tempSpecifics;
+            
+            currentPackage->gensets.push_back(gi);
+        }
+        tempSpecifics.clear();
     }
     ;
 
@@ -359,8 +276,10 @@ meta_atributos:
     ;
 
 lista_ids:
-    ID
+    ID 
+    { tempSpecifics.push_back(string($1)); }
     | lista_ids COMMA ID
+    { tempSpecifics.push_back(string($3)); }
     ;
 
 /* RELAÇÕES */
@@ -559,7 +478,6 @@ void yyerror(const char *s) {
 void printSynthesisReport(string dirName) {
 
     string reportPath = "output/" + dirName + "/" + dirName +  "_Syntax_analysis.txt";
-
     reportFile.open(reportPath);
     reportFile << "\n========================================================" << endl;
     reportFile << "             RELATÓRIO DE SÍNTESE DA ONTOLOGIA            " << endl;
@@ -568,18 +486,23 @@ void printSynthesisReport(string dirName) {
     reportFile << "\n[1] ESTATÍSTICAS GERAIS" << endl;
     reportFile << "Pacotes:    " << packages.size() << endl;
     reportFile << "Datatypes:  " << datatypes.size() << endl;
-    reportFile << "Gensets:    " << gensets.size() << endl;
+    
+    // Conta total de gensets somando de todos os pacotes
+    int totalGensets = 0;
+    for(const auto& pkg : packages) totalGensets += pkg.gensets.size();
+    reportFile << "Gensets:    " << totalGensets << endl;
 
-    reportFile << "\n[2] DETALHAMENTO POR PACOTE E CLASSES" << endl;
+    reportFile << "\n[2] DETALHAMENTO POR PACOTE" << endl;
     
     for (const auto& pkg : packages) {
         reportFile << "\nPACOTE: " << pkg.name << endl;
         reportFile << "--------------------------------------------------------" << endl;
         
-        if (pkg.classes.empty()) {
-            reportFile << "(Nenhuma classe neste pacote)" << endl;
+        if (pkg.classes.empty() && pkg.gensets.empty()) {
+            reportFile << "(Pacote vazio)" << endl;
         }
 
+        // --- CLASSES ---
         for (const auto& cls : pkg.classes) {
             reportFile << "* Classe [" << cls.stereotype << "] " << cls.name;
             if (!cls.parents.empty()) {
@@ -590,7 +513,7 @@ void printSynthesisReport(string dirName) {
                 reportFile << ")";
             }
             reportFile << endl;
-            
+
             // Atributos
             if (!cls.attributes.empty()) {
                 reportFile << "  - Atributos: ";
@@ -609,14 +532,22 @@ void printSynthesisReport(string dirName) {
             }
             reportFile << endl;
         }
-    }
-    
-    if (!gensets.empty()) {
-        reportFile << "\n[3] GENSETS (GENERALIZAÇÕES)" << endl;
-        for (const auto& gs : gensets) {
-            reportFile << "* Genset '" << gs.name << "' (General: " << gs.general << ")" << endl;
+
+        // --- GENSETS (Agora impressos dentro do pacote) ---
+        if (!pkg.gensets.empty()) {
+            reportFile << "  [Generalizações / Gensets]" << endl;
+            for (const auto& gs : pkg.gensets) {
+                reportFile << "  * Genset '" << gs.name << "'" << endl;
+                reportFile << "    - General: " << gs.general << endl;
+                reportFile << "    - Specifics: ";
+                for (size_t i = 0; i < gs.specifics.size(); ++i) {
+                    reportFile << gs.specifics[i] << (i < gs.specifics.size() - 1 ? ", " : "");
+                }
+                reportFile << endl << endl;
+            }
         }
     }
+    
     reportFile.close();
 }
 

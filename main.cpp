@@ -55,7 +55,12 @@ int main(int argc, char **argv) {
         if(fileName == "." || fileName == "..") continue;
         if(!endsWith(fileName, "TokensList.txt")) continue;
 
-        std::string fullPath = std::string(directoryPath) + "/" + fileName;
+        std::string fullPath;
+        if(std::string(directoryPath).back() == '/')
+            fullPath = std::string(directoryPath) + fileName;
+        else
+            fullPath = std::string(directoryPath) + '/' +  fileName;
+        
         currentFileName = fullPath;
 
         printf("Processando arquivo: %s\n", fullPath.c_str());
