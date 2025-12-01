@@ -148,6 +148,9 @@ relation_list:
 opt_corpo_classe:
     /* vazio */
     | LBRACE corpo_classe RBRACE
+    | LBRACE corpo_classe error { 
+        yyerror("Erro fatal: Bloco da classe aberto com '{' não foi fechado com '}'.");
+    }
     ;
 
 corpo_classe:
@@ -158,9 +161,6 @@ corpo_classe:
 lista_membros:
     membro_classe
     | lista_membros membro_classe
-    /* PONTO DE RECUPERAÇÃO: Erro dentro da classe (atributo ou relação malformada) */
-    | lista_membros error { yyerrok; }
-    ;
 
 membro_classe:
     atributo
