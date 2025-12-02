@@ -11,7 +11,12 @@ O sistema percorre um diretório informado pelo usuário, identifica automaticam
 - **GNU Make** (opcional, para automação da compilação)
 - **Linux / WSL / macOS** (recomendado)
 
-
+## ❗Considerações
+Para obter o resultado esperado, os arquivos de entrada devem seguir uma formatação específica, seguindo o padrão:
+```
+linha coluna TYPE lexema
+```
+OBS: Vale destacar que só serão analisados os arquivos com o sufixo **"_TokensList.txt"**.
 
 ## ⚙️ Instalação e Configuração
 
@@ -36,4 +41,5 @@ Para rodar o analisador sobre um diretório, use:
 ```bash
 ./parser caminho_diretorio/
 ```
+
 
