@@ -52,6 +52,8 @@ struct GensetInfo {
     string name;
     string general;
     vector<string> specifics;
+    bool isDisjoint = false;
+    bool isComplete = false;        
 };
 
 struct PackageInfo {
@@ -93,6 +95,8 @@ vector<DatatypeInfo> datatypes;
 vector<EnumInfo> enums;
 vector<string> tempSpecifics;
 vector<string> tempEnumLiterals;
+bool tempDisjoint = false;
+bool tempComplete = false;  
 vector<ErrorInfo> errorLog;
 unordered_map<string, int> mapRelationStereotypes;
 unordered_map<string, int> mapDatatypes;

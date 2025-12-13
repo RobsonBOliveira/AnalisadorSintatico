@@ -233,20 +233,22 @@ lista_enum:
 
 declaracao_genset:
     meta_atributos GENSET ID WHERE GENERAL ID SPECIFICS 
-    { tempSpecifics.clear(); } /* Limpa antes de ler a lista */
+    { tempSpecifics.clear(); }
     lista_ids
     {
         if (currentPackage != nullptr) {
             GensetInfo gi;
             gi.name = string($3);
             gi.general = string($6);
-            gi.specifics = tempSpecifics; // Salva a lista capturada
-            
+            gi.specifics = tempSpecifics;
+            gi.isDisjoint = tempDisjoint; // Salva flag
+            gi.isComplete = tempComplete; // Salva flag
             currentPackage->gensets.push_back(gi);
         }
         tempSpecifics.clear();
     }
-    | meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS 
+    |
+    meta_atributos GENSET ID LBRACE GENERAL ID SPECIFICS 
     { tempSpecifics.clear(); } 
     lista_ids RBRACE
     {
@@ -255,7 +257,8 @@ declaracao_genset:
             gi.name = string($3);
             gi.general = string($6);
             gi.specifics = tempSpecifics;
-            
+            gi.isDisjoint = tempDisjoint; // Salva flag
+            gi.isComplete = tempComplete; // Salva flag
             currentPackage->gensets.push_back(gi);
         }
         tempSpecifics.clear();
@@ -266,10 +269,11 @@ declaracao_genset:
     {
         if (currentPackage != nullptr) {
             GensetInfo gi;
-            gi.name = "Unnamed_Genset"; // Nome padrão
+            gi.name = "Unnamed_Genset";
             gi.general = string($2);
             gi.specifics = tempSpecifics;
-            
+            gi.isDisjoint = tempDisjoint; // Salva flag
+            gi.isComplete = tempComplete; // Salva flag
             currentPackage->gensets.push_back(gi);
         }
         tempSpecifics.clear();
@@ -277,9 +281,9 @@ declaracao_genset:
     ;
 
 meta_atributos:
-    /* vazio */
-    | meta_atributos DISJOINT
-    | meta_atributos COMPLETE
+    /* vazio */ { tempDisjoint = false; tempComplete = false; }
+    | meta_atributos DISJOINT { tempDisjoint = true; }
+    | meta_atributos COMPLETE { tempComplete = true; }
     ;
 
 lista_ids:
@@ -582,7 +586,10 @@ void printSynthesisReport(string dirName) {
         if (!pkg.gensets.empty()) {
             reportFile << "  [Generalizações / Gensets]" << endl;
             for (const auto& gs : pkg.gensets) {
-                reportFile << "  * Genset '" << gs.name << "'" << endl;
+                reportFile << "  * Genset '" << gs.name << "' {";
+                if(gs.isDisjoint) reportFile << " disjoint";
+                if(gs.isComplete) reportFile << " complete";
+                reportFile << " }" << endl;
                 reportFile << "    - General: " << gs.general << endl;
                 reportFile << "    - Specifics: ";
                 for (size_t i = 0; i < gs.specifics.size(); ++i) {
